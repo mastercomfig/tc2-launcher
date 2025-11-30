@@ -259,9 +259,7 @@ def run_non_blocking(cmd: list[str], cwd: Optional[Path] = None) -> None:
                 shell=True,
                 creationflags=subprocess.DETACHED_PROCESS
                 | subprocess.CREATE_NEW_PROCESS_GROUP,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                close_fds=True,
             )
         elif os.name == "posix":
             subprocess.Popen(
@@ -269,6 +267,7 @@ def run_non_blocking(cmd: list[str], cwd: Optional[Path] = None) -> None:
                 cwd=str(cwd) if cwd else None,
                 shell=True,
                 start_new_session=True,
+                close_fds=True,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -309,7 +308,8 @@ def launch_game(
 
     # Resolve options with persistence
     settings = read_settings(dest)
-    default_base = ["-steam", "-particles", "1", "+ip", "127.0.0.1", "-noborder"]
+    # TODO: condebug prevents an access violation crash to stdout or something, need to fix the Popen call eventually
+    default_base = ["-steam", "-particles", "1", "+ip", "127.0.0.1", "-condebug", "-noborder"]
     if not extra_opts:
         extra_opts = settings.get("opts")
     if not extra_opts or not isinstance(extra_opts, list):
