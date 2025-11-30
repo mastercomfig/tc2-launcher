@@ -287,7 +287,7 @@ def _get_game_exe(dest: Path | None) -> Optional[Path]:
     if sys.platform.startswith("win"):
         exe_path = game_dir / "tc2_win64.exe"
     else:
-        exe_path = game_dir / "tc2_linux64"
+        exe_path = game_dir / "tc2.sh"
 
     if exe_path and exe_path.exists():
         return exe_path
@@ -309,7 +309,10 @@ def launch_game(
     # Resolve options with persistence
     settings = read_settings(dest)
     # TODO: condebug prevents an access violation crash to stdout or something, need to fix the Popen call eventually
-    default_base = ["-steam", "-particles", "1", "+ip", "127.0.0.1", "-condebug", "-noborder"]
+    if sys.platform.startswith("win"):
+        default_base = ["-steam", "-particles", "1", "+ip", "127.0.0.1", "-condebug", "-noborder"]
+    else:
+        default_base = ["-condebug", "-noborder"]
     if not extra_opts:
         extra_opts = settings.get("opts")
     if not extra_opts or not isinstance(extra_opts, list):
