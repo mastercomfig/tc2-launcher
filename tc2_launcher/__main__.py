@@ -1,5 +1,6 @@
 import argparse
 import multiprocessing
+import time
 from pathlib import Path
 import sys
 
@@ -8,11 +9,36 @@ from tc2_launcher.run import update_archive
 from tc2_launcher.run import launch_game
 from tc2_launcher.run import set_launch_options
 from tc2_launcher.run import default_dest_dir
+from tc2_launcher.run import update_self
 
 version = "0.1.0"
 
 
 def main():
+    launch_gui = False
+    if len(sys.argv) >= 3 and sys.argv[1] == "--replace":
+        # Replacement mode after self-update
+        original_path = Path(sys.argv[2]).resolve()
+        current_path = Path(sys.argv[0]).resolve()
+        try:
+            # Wait a moment to ensure the original process has exited
+            time.sleep(2)
+            # Replace the original file with the current file
+            original_path.unlink()
+            current_path.replace(original_path)
+            print("Self-update applied successfully.")
+        except Exception as e:
+            print(f"ERROR: Failed to apply self-update: {e}")
+
+        launch_gui = len(sys.argv) == 3
+    else:
+        if update_self(version):
+            sys.exit(0)
+            return
+
+        launch_gui = len(sys.argv) == 1
+
+
     parser = argparse.ArgumentParser(description=f"TC2 Launcher v{version}")
     parser.add_argument(
         "--dest",
@@ -44,8 +70,8 @@ def main():
         nargs=argparse.REMAINDER,
         help="User launch options",
     )
-
-    if len(sys.argv) == 1:
+    
+    if launch_gui:
         start_gui()
         return
 

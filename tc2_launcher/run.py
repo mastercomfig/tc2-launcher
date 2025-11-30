@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import tempfile
 from pathlib import Path
 from typing import Optional, Tuple
 from shutil import rmtree
@@ -57,8 +58,51 @@ def _find_asset(release: dict, asset_filter: str) -> Optional[Tuple[str, str]]:
     return None
 
 
-def update_self():
-    pass
+def update_self(current_version: str) -> bool:
+    try:
+        release = _get_latest_release(LAUNCHER_REPO)
+        tag = release.get("tag_name", "").lstrip("v")
+    except Exception as e:
+        print(f"ERROR: Failed to get self-update info: {e}")
+        return False
+
+    if tag == current_version:
+        return False
+    
+    print(f"Self-update available: {current_version} -> {tag}")
+
+    if os.name == "nt":
+        asset_filter = ".exe"
+    else:
+        asset_filter = "-linux"
+    asset = _find_asset(release, asset_filter)
+    if not asset:
+        print(f"ERROR: No asset matching '{asset_filter}' found in self-update release {tag}.")
+        return False
+    
+    asset_name, download_url = asset
+
+    # Step 4: Download asset to temp file
+    temp_dir = Path(tempfile.gettempdir())
+    temp_path = temp_dir / f"TC2LauncherUpdate_{tag}" / asset_name
+    print(f"Downloading self-update to {temp_path}...")
+    try:
+        _download(download_url, temp_path)
+    except Exception as e:
+        print(f"ERROR: Failed to download self-update: {e}")
+        return False
+    print("Self-update download complete.")
+
+    current_path = Path(sys.argv[0]).resolve()
+    print("Launching self-update...")
+    try:
+        filtered_args = [arg for arg in sys.argv[1:] if arg != "--replace"]
+        run_non_blocking([temp_path, "--replace", current_path] + filtered_args)
+        sys.exit(0)
+        return True
+    except Exception as e:
+        print(f"Failed to launch self-update: {e}")
+        return False
 
 
 def _read_data(path: Path) -> dict:
@@ -144,7 +188,7 @@ def update_archive(
 
     state = read_state(dest)
     current_tag = state.get("tag")
-    if not force and current_tag == tag:
+    if not force and current_tag == tag and fail_code == 1:
         print("Latest asset already downloaded.")
         return 0
 
@@ -153,7 +197,6 @@ def update_archive(
     else:
         asset_filter = "game-linux.zip"
     asset = _find_asset(release, asset_filter)
-
     if not asset:
         print(f"ERROR: No asset matching '{asset_filter}' found in release {tag}.")
         return fail_code
@@ -168,7 +211,7 @@ def update_archive(
     asset_path = dest / asset_name
     game_dir = dest / "game"
 
-    print("Downloading latest asset...")
+    print(f"Downloading latest asset to {asset_path}...")
     try:
         _download(download_url, asset_path)
     except Exception as e:

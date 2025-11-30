@@ -24,6 +24,10 @@ class Api:
     def open_install_folder(self):
         open_install_folder()
 
+    def check_for_updates(self):
+        res = update_archive()
+        webview.windows[0].evaluate_js(f"archiveReady({res});")
+
 
 def get_entrypoint():
     def exists(path):
