@@ -2,6 +2,7 @@ import argparse
 import multiprocessing
 import time
 from pathlib import Path
+from shutil import copyfile
 import sys
 
 from tc2_launcher.gui import start_gui
@@ -25,7 +26,7 @@ def main():
             time.sleep(2)
             # Replace the original file with the current file
             original_path.unlink()
-            current_path.replace(original_path)
+            copyfile(current_path, original_path)
             print("Self-update applied successfully.")
         except Exception as e:
             print(f"ERROR: Failed to apply self-update: {e}")
@@ -38,7 +39,7 @@ def main():
 
         launch_gui = len(sys.argv) == 1
 
-    clean_self_update()
+        clean_self_update()
 
     parser = argparse.ArgumentParser(description=f"TC2 Launcher v{version}")
     parser.add_argument(
