@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Team Comtress Launcher</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scrollbar-width: thin;
+            scrollbar-color: rgb(0, 150, 136) rgb(33, 37, 41);
+            scroll-padding-top: 89px;
+            scroll-behavior: smooth;
+            overflow-x: hidden;
+            overflow-y: hidden;
+            color-scheme: dark;
+        }
+
+        body {
+            color-scheme: dark;
+            background-color: rgb(33, 33, 33);
+            color: rgb(222, 226, 230);
+            font-family: "Roboto Flex Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            font-size: 16px;
+            font-weight: 400;
+            letter-spacing: 0.1px;
+            line-height: 24px;
+            margin: 0;
+            text-align: start;
+            overflow-x: hidden;
+            overflow-y: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #logo-container {
+            text-align: center;
+            padding-top: 1rem;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #launch-bar {
+            display: flex;
+            width: 100%;
+            justify-content: center;
+            padding: 1rem 1rem;
+            background-color: rgb(255 255 255 / 5%);
+            z-index: 10;
+        }
+
+        .logo {
+            width: min(70vw, 600px);
+            height: auto;
+        }
+
+        .btn {
+            border: none;
+            padding: 0.5rem 1rem;
+            vertical-align: middle;
+        }
+
+        .btn:hover:not(:disabled) {
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background-color: rgb(0, 132, 120);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: rgb(0, 150, 136);
+        }
+
+        .btn-secondary {
+            background-color: rgb(97, 97, 97);
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: rgb(117, 117, 117);
+        }
+
+        .btn-lg {
+            font-size: 1.25rem;
+            padding: 0.75rem 1.5rem;
+        }
+
+        .spacer {
+            flex-grow: 1;
+        }
+
+        .menu {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgb(33, 33, 33);
+            color: rgb(222, 226, 230);
+            padding: 2rem;
+            overflow-y: auto;
+            z-index: 5;
+        }
+
+        #launch-options {
+            width: 100%;
+            padding: 0.5rem;
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .info-label {
+            margin-right: 1rem;
+            font-size: 1.25rem;
+            vertical-align: middle;
+            color: rgb(180, 180, 180);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div id="logo-container">
+            <img src="tc2.png" class="logo" />
+        </div>
+        <div id="launch-bar">
+            <div class="spacer"></div>
+            <div class="game-menu">
+                <span class="info-label" style="display: none">Offline mode</span>
+                <button id="launch-btn" class="btn btn-primary btn-lg" disabled>Updating...</button>
+                <button id="settings-btn" class="btn btn-secondary btn-lg" title="Settings">
+                    <svg width="24" height="20" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M7 3C8.86384 3 10.4299 4.27477 10.874 6H19V8H10.874C10.4299 9.72523 8.86384 11 7 11C4.79086 11 3 9.20914 3 7C3 4.79086 4.79086 3 7 3ZM7 9C8.10457 9 9 8.10457 9 7C9 5.89543 8.10457 5 7 5C5.89543 5 5 5.89543 5 7C5 8.10457 5.89543 9 7 9Z"
+                            fill="currentColor" />
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M17 20C15.1362 20 13.5701 18.7252 13.126 17H5V15H13.126C13.5701 13.2748 15.1362 12 17 12C19.2091 12 21 13.7909 21 16C21 18.2091 19.2091 20 17 20ZM17 18C18.1046 18 19 17.1046 19 16C19 14.8954 18.1046 14 17 14C15.8954 14 15 14.8954 15 16C15 17.1046 15.8954 18 17 18Z"
+                            fill="currentColor" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="settings-menu" class="menu">
+        <h1>Settings</h1>
+        <h2>Launch Options</h2>
+        <input id="launch-options" type="text"></input>
+        <h2>Install Folder</h2>
+        <button id="folder-btn" class="btn btn-secondary" disabled>Browse Install Folder</button>
+    </div>
+    <script>
+        document.getElementById("launch-btn").addEventListener("click", () => {
+            window.pywebview.api.launch_game();
+        });
+        document.getElementById("settings-btn").addEventListener("click", () => {
+            const menu = document.getElementById("settings-menu");
+            if (menu.style.display === "block") {
+                menu.style.display = "none";
+            } else {
+                menu.style.display = "block";
+            }
+        });
+        document.getElementById("launch-options").addEventListener("input", (event) => {
+            window.pywebview.api.set_launch_options(options);
+        });
+        document.getElementById("folder-btn").addEventListener("click", () => {
+            window.pywebview.api.open_install_folder();
+        });
+        function archiveReady(offline) {
+            document.getElementById("launch-btn").disabled = false;
+            document.getElementById("folder-btn").disabled = false;
+            document.getElementById("launch-btn").innerText = "Launch";
+            const online = offline === 0;
+            if (!online) {
+                document.querySelector(".info-label").innerText = "Offline mode";
+                if (offline !== 1) {
+                    document.getElementById("launch-btn").innerText = "Install failed";
+                }
+                document.querySelector(".info-label").style.display = "inline";
+            }
+        }
+    </script>
+</body>
+
+</html>

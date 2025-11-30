@@ -1,0 +1,23 @@
+[project]
+name = "tc2-launcher"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "mastercoms",email = "mastercoms@tuta.io"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "requests>=2.31.0",
+    "setuptools (>=80.9.0,<81.0.0)",
+    "wheel (>=0.45.1,<0.46.0)",
+    "pythonnet (>=3.0.5,<4.0.0)",
+    "pyinstaller (>=6.17.0,<7.0.0)",
+    "pywebview (>=6.1,<7.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
