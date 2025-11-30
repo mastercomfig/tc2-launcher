@@ -82,12 +82,11 @@ def update_self(current_version: str) -> bool:
     
     asset_name, download_url = asset
 
-    # Step 4: Download asset to temp file
-    temp_dir = Path(tempfile.gettempdir())
-    temp_path = temp_dir / f"TC2LauncherUpdate_{tag}" / asset_name
-    print(f"Downloading self-update to {temp_path}...")
+    dest_dir = default_dest_dir()
+    download_path = dest_dir / "update" / tag / asset_name
+    print(f"Downloading self-update...")
     try:
-        _download(download_url, temp_path)
+        _download(download_url, download_path)
     except Exception as e:
         print(f"ERROR: Failed to download self-update: {e}")
         return False
@@ -97,12 +96,21 @@ def update_self(current_version: str) -> bool:
     print("Launching self-update...")
     try:
         filtered_args = [arg for arg in sys.argv[1:] if arg != "--replace"]
-        run_non_blocking([temp_path, "--replace", current_path] + filtered_args)
+        run_non_blocking([download_path, "--replace", current_path] + filtered_args)
         sys.exit(0)
         return True
     except Exception as e:
         print(f"Failed to launch self-update: {e}")
         return False
+    
+def clean_self_update():
+    dest_dir = default_dest_dir()
+    update_dir = dest_dir / "update"
+    if update_dir.exists() and update_dir.is_dir():
+        try:
+            rmtree(update_dir)
+        except Exception:
+            pass
 
 
 def _read_data(path: Path) -> dict:

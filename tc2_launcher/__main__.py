@@ -9,7 +9,7 @@ from tc2_launcher.run import update_archive
 from tc2_launcher.run import launch_game
 from tc2_launcher.run import set_launch_options
 from tc2_launcher.run import default_dest_dir
-from tc2_launcher.run import update_self
+from tc2_launcher.run import clean_self_update, update_self
 
 version = "0.2.0"
 
@@ -38,6 +38,7 @@ def main():
 
         launch_gui = len(sys.argv) == 1
 
+    clean_self_update()
 
     parser = argparse.ArgumentParser(description=f"TC2 Launcher v{version}")
     parser.add_argument(
