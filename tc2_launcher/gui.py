@@ -3,6 +3,7 @@ import webview
 from pathlib import Path
 
 from tc2_launcher.run import (
+    get_launch_options,
     open_install_folder,
     update_archive,
     launch_game,
@@ -56,10 +57,13 @@ entry_parent = entry_path.parent
 
 
 def start_gui():
+    opts = get_launch_options()
+    opt_str = " ".join(opts)
     window = webview.create_window(
         "Team Comtress Launcher", entry, js_api=Api(), min_size=(640, 360)
     )
     if window:
+        window.state.opts = opt_str
         window.events.loaded += lambda: on_loaded(window)
         webview.start(icon=str(entry_parent / "favicon.ico"))
     else:

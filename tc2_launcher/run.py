@@ -68,7 +68,7 @@ def update_self(current_version: str) -> bool:
 
     if tag == current_version:
         return False
-    
+
     print(f"Self-update available: {current_version} -> {tag}")
 
     if os.name == "nt":
@@ -77,9 +77,11 @@ def update_self(current_version: str) -> bool:
         asset_filter = "-linux"
     asset = _find_asset(release, asset_filter)
     if not asset:
-        print(f"ERROR: No asset matching '{asset_filter}' found in self-update release {tag}.")
+        print(
+            f"ERROR: No asset matching '{asset_filter}' found in self-update release {tag}."
+        )
         return False
-    
+
     asset_name, download_url = asset
 
     dest_dir = default_dest_dir()
@@ -102,7 +104,8 @@ def update_self(current_version: str) -> bool:
     except Exception as e:
         print(f"Failed to launch self-update: {e}")
         return False
-    
+
+
 def clean_self_update():
     dest_dir = default_dest_dir()
     update_dir = dest_dir / "update"
@@ -319,6 +322,17 @@ def launch_game(
         run_non_blocking(cmd, cwd=exe_path.parent)
     except Exception as e:
         print(f"Failed to launch game: {e}")
+
+
+def get_launch_options(dest: Path | None = None) -> list[str]:
+    if not dest:
+        dest = default_dest_dir()
+
+    settings = read_settings(dest)
+    options = settings.get("opts")
+    if options and isinstance(options, list):
+        return options
+    return []
 
 
 def set_launch_options(
