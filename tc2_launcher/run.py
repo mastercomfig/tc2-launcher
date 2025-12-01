@@ -240,6 +240,11 @@ def update_archive(
 
     print("Extraction complete.")
 
+    exe_path = _get_game_exe(dest)
+    if not exe_path:
+        print(f"ERROR: Could not locate game executable after update.")
+        return -2
+
     state["tag"] = tag
     write_state(dest, state)
 

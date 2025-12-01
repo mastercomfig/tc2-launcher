@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 import webview
 
 from pathlib import Path
@@ -65,6 +68,11 @@ def start_gui():
     if window:
         window.state.opts = opt_str
         window.events.loaded += lambda: on_loaded(window)
-        webview.start(icon=str(entry_parent / "favicon.ico"))
+        try:
+            webview.start(icon=str(entry_parent / "favicon.ico"))
+        except webview.errors.WebViewException as e:
+            if os.name == "posix":
+                subprocess.run(["/usr/bin/notify-send", "--icon=error", f"TC2 Launcher Error: {e}"])
+            raise e
     else:
         print("Failed to create webview window.")

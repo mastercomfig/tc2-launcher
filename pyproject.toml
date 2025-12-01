@@ -14,8 +14,8 @@ dependencies = [
     "wheel (>=0.45.1,<0.46.0)",
     "pythonnet (>=3.0.5,<4.0.0)",
     "pyinstaller (>=6.17.0,<7.0.0)",
-    "pywebview[pyside6] (>=6.1,<7.0) ; sys_platform == \"Linux\"",
-    "pywebview (>=6.1,<7.0) ; sys_platform == \"Windows\"",
+    "pywebview (>=6.1,<7.0) ; sys_platform == \"win32\"",
+    "pywebview[gtk] (>=6.1,<7.0) ; sys_platform == \"linux\"",
 ]
 
 

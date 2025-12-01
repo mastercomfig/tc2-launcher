@@ -207,8 +207,11 @@
             document.getElementById("folder-btn").disabled = true;
             window.pywebview.api.check_for_updates();
         });
-        function archiveReady(offline) {
-            const available = offline <= 1;
+        function archiveReady(error) {
+            const online = error <= 0;
+            const hasErr = error !== 0;
+            const errLevel = Math.abs(error);
+            const available = errLevel <= 1;
             document.getElementById("update-btn").disabled = false;
             if (available) {
                 document.getElementById("launch-btn").disabled = false;
@@ -217,15 +220,12 @@
             } else {
                 document.getElementById("launch-btn").disabled = true;
                 document.getElementById("folder-btn").disabled = true;
+                document.getElementById("launch-btn").innerText = "Install failed";
             }
-            const online = offline === 0;
             if (online) {
                 document.querySelector(".info-label").style.display = "none";
             } else {
                 document.querySelector(".info-label").style.display = "inline";
-                if (offline > 1) {
-                    document.getElementById("launch-btn").innerText = "Install failed";
-                }
             }
         }
 

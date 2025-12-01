@@ -7,7 +7,7 @@ description = "Python graph (network) package"
 optional = false
 python-versions = "*"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "altgraph-0.17.5-py2.py3-none-any.whl", hash = "sha256:f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597"},
     {file = "altgraph-0.17.5.tar.gz", hash = "sha256:c87b395dd12fabde9c99573a9749d67da8d29ef9de0125c7f536699b4a9bc9e7"},
@@ -20,7 +20,7 @@ description = "Fast and simple WSGI-framework for small web-applications."
 optional = false
 python-versions = "*"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "bottle-0.13.4-py2.py3-none-any.whl", hash = "sha256:045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e"},
     {file = "bottle-0.13.4.tar.gz", hash = "sha256:787e78327e12b227938de02248333d788cfe45987edca735f8f88e03472c3f47"},
@@ -33,7 +33,7 @@ description = "Python package for providing Mozilla's CA Bundle."
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "certifi-2025.11.12-py3-none-any.whl", hash = "sha256:97de8790030bbd5c2d96b7ec782fc2f7820ef8dba6db909ccf95449f2d062d4b"},
     {file = "certifi-2025.11.12.tar.gz", hash = "sha256:d8ab5478f2ecd78af242878415affce761ca6bc54a22a27e026d7c25357c3316"},
@@ -46,7 +46,7 @@ description = "Foreign Function Interface for Python calling C code."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "cffi-2.0.0-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:0cf2d91ecc3fcc0625c2c530fe004f82c110405f101548512cce44322fa8ac44"},
     {file = "cffi-2.0.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:f73b96c41e3b2adedc34a7356e64c8eb96e03a3782b535e043a986276ce12a49"},
@@ -144,7 +144,7 @@ description = "The Real First Universal Charset Detector. Open, modern and activ
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "charset_normalizer-3.4.4-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:e824f1492727fa856dd6eda4f7cee25f8518a12f3c4a56a74e8095695089cf6d"},
     {file = "charset_normalizer-3.4.4-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:4bd5d4137d500351a30687c2d3971758aac9a19208fc110ccb9d7188fbe709e8"},
@@ -268,7 +268,7 @@ description = "Generic pure Python loader for .NET runtimes"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "clr_loader-0.2.8-py3-none-any.whl", hash = "sha256:2cd76904e2f68fecab1ad1d158fb2905b5173a2b0cd54606d548518642bfbce9"},
     {file = "clr_loader-0.2.8.tar.gz", hash = "sha256:b4cd3a2ee5f0489885ef07ffd87eb38b2cee24ca65dcacea97b34e7b59913814"},
@@ -284,7 +284,7 @@ description = "Internationalized Domain Names in Applications (IDNA)"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "idna-3.11-py3-none-any.whl", hash = "sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea"},
     {file = "idna-3.11.tar.gz", hash = "sha256:795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902"},
@@ -316,7 +316,7 @@ description = "Core utilities for Python packages"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "packaging-25.0-py3-none-any.whl", hash = "sha256:29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484"},
     {file = "packaging-25.0.tar.gz", hash = "sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f"},
@@ -329,7 +329,7 @@ description = "Python PE parsing module"
 optional = false
 python-versions = ">=3.6.0"
 groups = ["main"]
-markers = "<empty>"
+markers = "sys_platform == \"win32\""
 files = [
     {file = "pefile-2024.8.26-py3-none-any.whl", hash = "sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"},
     {file = "pefile-2024.8.26.tar.gz", hash = "sha256:3ff6c5d8b43e8c37bb6e6dd5085658d658a7a0bdcd20b6a07b1fcfc1c4e9d632"},
@@ -342,9 +342,38 @@ description = "Proxy Implementation"
 optional = false
 python-versions = "*"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "proxy_tools-0.1.0.tar.gz", hash = "sha256:ccb3751f529c047e2d8a58440d86b205303cf0fe8146f784d1cbcd94f0a28010"},
+]
+
+[[package]]
+name = "pycairo"
+version = "1.29.0"
+description = "Python interface for cairo"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "sys_platform == \"linux\""
+files = [
+    {file = "pycairo-1.29.0-cp310-cp310-win32.whl", hash = "sha256:96c67e6caba72afd285c2372806a0175b1aa2f4537aa88fb4d9802d726effcd1"},
+    {file = "pycairo-1.29.0-cp310-cp310-win_amd64.whl", hash = "sha256:65bddd944aee9f7d7d72821b1c87e97593856617c2820a78d589d66aa8afbd08"},
+    {file = "pycairo-1.29.0-cp310-cp310-win_arm64.whl", hash = "sha256:15b36aea699e2ff215cb6a21501223246032e572a3a10858366acdd69c81a1c8"},
+    {file = "pycairo-1.29.0-cp311-cp311-win32.whl", hash = "sha256:12757ebfb304b645861283c20585c9204c3430671fad925419cba04844d6dfed"},
+    {file = "pycairo-1.29.0-cp311-cp311-win_amd64.whl", hash = "sha256:3391532db03f9601c1cee9ebfa15b7d1db183c6020f3e75c1348cee16825934f"},
+    {file = "pycairo-1.29.0-cp311-cp311-win_arm64.whl", hash = "sha256:b69be8bb65c46b680771dc6a1a422b1cdd0cffb17be548f223e8cbbb6205567c"},
+    {file = "pycairo-1.29.0-cp312-cp312-win32.whl", hash = "sha256:91bcd7b5835764c616a615d9948a9afea29237b34d2ed013526807c3d79bb1d0"},
+    {file = "pycairo-1.29.0-cp312-cp312-win_amd64.whl", hash = "sha256:3f01c3b5e49ef9411fff6bc7db1e765f542dc1c9cfed4542958a5afa3a8b8e76"},
+    {file = "pycairo-1.29.0-cp312-cp312-win_arm64.whl", hash = "sha256:eafe3d2076f3533535ad4a361fa0754e0ee66b90e548a3a0f558fed00b1248f2"},
+    {file = "pycairo-1.29.0-cp313-cp313-win32.whl", hash = "sha256:3eb382a4141591807073274522f7aecab9e8fa2f14feafd11ac03a13a58141d7"},
+    {file = "pycairo-1.29.0-cp313-cp313-win_amd64.whl", hash = "sha256:91114e4b3fbf4287c2b0788f83e1f566ce031bda49cf1c3c3c19c3e986e95c38"},
+    {file = "pycairo-1.29.0-cp313-cp313-win_arm64.whl", hash = "sha256:09b7f69a5ff6881e151354ea092137b97b0b1f0b2ab4eb81c92a02cc4a08e335"},
+    {file = "pycairo-1.29.0-cp314-cp314-win32.whl", hash = "sha256:69e2a7968a3fbb839736257bae153f547bca787113cc8d21e9e08ca4526e0b6b"},
+    {file = "pycairo-1.29.0-cp314-cp314-win_amd64.whl", hash = "sha256:e91243437a21cc4c67c401eff4433eadc45745275fa3ade1a0d877e50ffb90da"},
+    {file = "pycairo-1.29.0-cp314-cp314-win_arm64.whl", hash = "sha256:b72200ea0e5f73ae4c788cd2028a750062221385eb0e6d8f1ecc714d0b4fdf82"},
+    {file = "pycairo-1.29.0-cp314-cp314t-win_amd64.whl", hash = "sha256:5e45fce6185f553e79e4ef1722b8e98e6cde9900dbc48cb2637a9ccba86f627a"},
+    {file = "pycairo-1.29.0-cp314-cp314t-win_arm64.whl", hash = "sha256:caba0837a4b40d47c8dfb0f24cccc12c7831e3dd450837f2a356c75f21ce5a15"},
+    {file = "pycairo-1.29.0.tar.gz", hash = "sha256:f3f7fde97325cae80224c09f12564ef58d0d0f655da0e3b040f5807bd5bd3142"},
 ]
 
 [[package]]
@@ -354,11 +383,41 @@ description = "C parser in Python"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "implementation_name != \"PyPy\" and (sys_platform == \"Linux\" or sys_platform == \"Windows\")"
+markers = "implementation_name != \"PyPy\" and (sys_platform == \"win32\" or sys_platform == \"linux\")"
 files = [
     {file = "pycparser-2.23-py3-none-any.whl", hash = "sha256:e5c6e8d3fbad53479cab09ac03729e0a9faf2bee3db8208a550daf5af81a5934"},
     {file = "pycparser-2.23.tar.gz", hash = "sha256:78816d4f24add8f10a06d6f05b4d424ad9e96cfebf68a4ddc99c65c0720d00c2"},
 ]
+
+[[package]]
+name = "pygobject"
+version = "3.50.0"
+description = "Python bindings for GObject Introspection"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+markers = "sys_platform == \"linux\""
+files = [
+    {file = "pygobject-3.50.0.tar.gz", hash = "sha256:4500ad3dbf331773d8dedf7212544c999a76fc96b63a91b3dcac1e5925a1d103"},
+]
+
+[package.dependencies]
+pycairo = ">=1.16"
+
+[[package]]
+name = "pygobject-stubs"
+version = "2.14.0"
+description = "Typing stubs for PyGObject"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "sys_platform == \"linux\""
+files = [
+    {file = "pygobject_stubs-2.14.0.tar.gz", hash = "sha256:614d4908a9ed6e9b821498059ab2e86736346c2fd75c0286ccb018cfcfd8ab23"},
+]
+
+[package.extras]
+dev = ["PyGObject", "codespell (>=2.4.1)", "isort (>=6.0.1)", "pre-commit", "ruff (>=0.12.7)"]
 
 [[package]]
 name = "pyinstaller"
@@ -367,7 +426,7 @@ description = "PyInstaller bundles a Python application and all its dependencies
 optional = false
 python-versions = "<3.15,>=3.8"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "pyinstaller-6.17.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:4e446b8030c6e5a2f712e3f82011ecf6c7ead86008357b0d23a0ec4bcde31dac"},
     {file = "pyinstaller-6.17.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:aa9fd87aaa28239c6f0d0210114029bd03f8cac316a90bab071a5092d7c85ad7"},
@@ -403,7 +462,7 @@ description = "Community maintained hooks for PyInstaller"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "pyinstaller_hooks_contrib-2025.10-py3-none-any.whl", hash = "sha256:aa7a378518772846221f63a84d6306d9827299323243db890851474dfd1231a9"},
     {file = "pyinstaller_hooks_contrib-2025.10.tar.gz", hash = "sha256:a1a737e5c0dccf1cf6f19a25e2efd109b9fec9ddd625f97f553dac16ee884881"},
@@ -414,73 +473,13 @@ packaging = ">=22.0"
 setuptools = ">=42.0.0"
 
 [[package]]
-name = "pyside6"
-version = "6.10.1"
-description = "Python bindings for the Qt cross-platform application and UI framework"
-optional = false
-python-versions = "<3.15,>=3.9"
-groups = ["main"]
-markers = "sys_platform == \"Linux\""
-files = [
-    {file = "pyside6-6.10.1-cp39-abi3-macosx_13_0_universal2.whl", hash = "sha256:d0e70dd0e126d01986f357c2a555722f9462cf8a942bf2ce180baf69f468e516"},
-    {file = "pyside6-6.10.1-cp39-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:4053bf51ba2c2cb20e1005edd469997976a02cec009f7c46356a0b65c137f1fa"},
-    {file = "pyside6-6.10.1-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:7d3ca20a40139ca5324a7864f1d91cdf2ff237e11bd16354a42670f2a4eeb13c"},
-    {file = "pyside6-6.10.1-cp39-abi3-win_amd64.whl", hash = "sha256:9f89ff994f774420eaa38cec6422fddd5356611d8481774820befd6f3bb84c9e"},
-    {file = "pyside6-6.10.1-cp39-abi3-win_arm64.whl", hash = "sha256:9c5c1d94387d1a32a6fae25348097918ef413b87dfa3767c46f737c6d48ae437"},
-]
-
-[package.dependencies]
-PySide6_Addons = "6.10.1"
-PySide6_Essentials = "6.10.1"
-shiboken6 = "6.10.1"
-
-[[package]]
-name = "pyside6-addons"
-version = "6.10.1"
-description = "Python bindings for the Qt cross-platform application and UI framework (Addons)"
-optional = false
-python-versions = "<3.15,>=3.9"
-groups = ["main"]
-markers = "sys_platform == \"Linux\""
-files = [
-    {file = "pyside6_addons-6.10.1-cp39-abi3-macosx_13_0_universal2.whl", hash = "sha256:4d2b82bbf9b861134845803837011e5f9ac7d33661b216805273cf0c6d0f8e82"},
-    {file = "pyside6_addons-6.10.1-cp39-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:330c229b58d30083a7b99ed22e118eb4f4126408429816a4044ccd0438ae81b4"},
-    {file = "pyside6_addons-6.10.1-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:56864b5fecd6924187a2d0f7e98d968ed72b6cc267caa5b294cd7e88fff4e54c"},
-    {file = "pyside6_addons-6.10.1-cp39-abi3-win_amd64.whl", hash = "sha256:b6e249d15407dd33d6a2ffabd9dc6d7a8ab8c95d05f16a71dad4d07781c76341"},
-    {file = "pyside6_addons-6.10.1-cp39-abi3-win_arm64.whl", hash = "sha256:0de303c0447326cdc6c8be5ab066ef581e2d0baf22560c9362d41b8304fdf2db"},
-]
-
-[package.dependencies]
-PySide6_Essentials = "6.10.1"
-shiboken6 = "6.10.1"
-
-[[package]]
-name = "pyside6-essentials"
-version = "6.10.1"
-description = "Python bindings for the Qt cross-platform application and UI framework (Essentials)"
-optional = false
-python-versions = "<3.15,>=3.9"
-groups = ["main"]
-markers = "sys_platform == \"Linux\""
-files = [
-    {file = "pyside6_essentials-6.10.1-cp39-abi3-macosx_13_0_universal2.whl", hash = "sha256:cd224aff3bb26ff1fca32c050e1c4d0bd9f951a96219d40d5f3d0128485b0bbe"},
-    {file = "pyside6_essentials-6.10.1-cp39-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:e9ccbfb58c03911a0bce1f2198605b02d4b5ca6276bfc0cbcf7c6f6393ffb856"},
-    {file = "pyside6_essentials-6.10.1-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:ec8617c9b143b0c19ba1cc5a7e98c538e4143795480cb152aee47802c18dc5d2"},
-    {file = "pyside6_essentials-6.10.1-cp39-abi3-win_amd64.whl", hash = "sha256:9555a48e8f0acf63fc6a23c250808db841b28a66ed6ad89ee0e4df7628752674"},
-    {file = "pyside6_essentials-6.10.1-cp39-abi3-win_arm64.whl", hash = "sha256:4d1d248644f1778f8ddae5da714ca0f5a150a5e6f602af2765a7d21b876da05c"},
-]
-
-[package.dependencies]
-shiboken6 = "6.10.1"
-
-[[package]]
 name = "pythonnet"
 version = "3.0.5"
 description = ".NET and Mono integration for Python"
 optional = false
 python-versions = "<3.14,>=3.7"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "pythonnet-3.0.5-py3-none-any.whl", hash = "sha256:f6702d694d5d5b163c9f3f5cc34e0bed8d6857150237fae411fefb883a656d20"},
     {file = "pythonnet-3.0.5.tar.gz", hash = "sha256:48e43ca463941b3608b32b4e236db92d8d40db4c58a75ace902985f76dac21cf"},
@@ -496,7 +495,7 @@ description = "Build GUI for your Python program with JavaScript, HTML, and CSS"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "pywebview-6.1-py3-none-any.whl", hash = "sha256:2b552a340557e76a740b045a25937f72dae751e0985d5f5d9556f697ba622ec5"},
     {file = "pywebview-6.1.tar.gz", hash = "sha256:f0b95047860caf3d921581f9e16b4edb1a125b23e2ce691c4da2968f8b160ff2"},
@@ -505,7 +504,9 @@ files = [
 [package.dependencies]
 bottle = "*"
 proxy_tools = "*"
-PySide6 = {version = "*", optional = true, markers = "extra == \"pyside6\""}
+PyGObject = {version = "3.50.0", optional = true, markers = "extra == \"gtk\""}
+PyGObject-stubs = {version = "*", optional = true, markers = "extra == \"gtk\""}
+pythonnet = {version = "*", markers = "sys_platform == \"win32\""}
 typing_extensions = "*"
 
 [package.extras]
@@ -527,7 +528,7 @@ description = "A (partial) reimplementation of pywin32 using ctypes/cffi"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
-markers = "<empty>"
+markers = "sys_platform == \"win32\""
 files = [
     {file = "pywin32-ctypes-0.2.3.tar.gz", hash = "sha256:d162dc04946d704503b2edc4d55f3dba5c1d539ead017afa00142c38b9885755"},
     {file = "pywin32_ctypes-0.2.3-py3-none-any.whl", hash = "sha256:8a1513379d709975552d202d942d9837758905c8d01eb82b8bcc30918929e7b8"},
@@ -540,7 +541,7 @@ description = "Python HTTP for Humans."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "requests-2.32.5-py3-none-any.whl", hash = "sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6"},
     {file = "requests-2.32.5.tar.gz", hash = "sha256:dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf"},
@@ -563,7 +564,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"},
     {file = "setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c"},
@@ -579,29 +580,13 @@ test = ["build[virtualenv] (>=1.0.3)", "filelock (>=3.4.0)", "ini2toml[lite] (>=
 type = ["importlib_metadata (>=7.0.2) ; python_version < \"3.10\"", "jaraco.develop (>=7.21) ; sys_platform != \"cygwin\"", "mypy (==1.14.*)", "pytest-mypy"]
 
 [[package]]
-name = "shiboken6"
-version = "6.10.1"
-description = "Python/C++ bindings helper module"
-optional = false
-python-versions = "<3.15,>=3.9"
-groups = ["main"]
-markers = "sys_platform == \"Linux\""
-files = [
-    {file = "shiboken6-6.10.1-cp39-abi3-macosx_13_0_universal2.whl", hash = "sha256:9f2990f5b61b0b68ecadcd896ab4441f2cb097eef7797ecc40584107d9850d71"},
-    {file = "shiboken6-6.10.1-cp39-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:f4221a52dfb81f24a0d20cc4f8981cb6edd810d5a9fb28287ce10d342573a0e4"},
-    {file = "shiboken6-6.10.1-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:c095b00f4d6bf578c0b2464bb4e264b351a99345374478570f69e2e679a2a1d0"},
-    {file = "shiboken6-6.10.1-cp39-abi3-win_amd64.whl", hash = "sha256:c1601d3cda1fa32779b141663873741b54e797cb0328458d7466281f117b0a4e"},
-    {file = "shiboken6-6.10.1-cp39-abi3-win_arm64.whl", hash = "sha256:5cf800917008587b551005a45add2d485cca66f5f7ecd5b320e9954e40448cc9"},
-]
-
-[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548"},
     {file = "typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466"},
@@ -614,7 +599,7 @@ description = "HTTP library with thread-safe connection pooling, file post, and 
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "urllib3-2.5.0-py3-none-any.whl", hash = "sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc"},
     {file = "urllib3-2.5.0.tar.gz", hash = "sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760"},
@@ -633,7 +618,7 @@ description = "A built-package format for Python"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "sys_platform == \"Linux\" or sys_platform == \"Windows\""
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
     {file = "wheel-0.45.1-py3-none-any.whl", hash = "sha256:708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248"},
     {file = "wheel-0.45.1.tar.gz", hash = "sha256:661e1abd9198507b1409a20c02106d9670b2576e916d58f520316666abca6729"},
@@ -645,4 +630,4 @@ test = ["pytest (>=6.0.0)", "setuptools (>=65)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "2bf2b6c4de55a9fb52667079cbe53c30b8862fe6bec826bf125e7b2f95f5b0a1"
+content-hash = "23e1d66cccc11edd5426e56ce37f14e9b80aacff94c0cb0cb01b82b4f4363bd0"

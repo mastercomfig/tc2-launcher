@@ -11,15 +11,7 @@ you will already have it by default. If you don't have it, you can install it [h
 
 ### Linux
 
-You must have either QT or GTK with Python extensions installed in order to use pywebview.
-
-#### Qt
-
-```sh
-sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine python3-pyqt5.qtwebchannel libqt5webkit5-dev
-```
-
-For other distributions, consult your distribution's documentation / package list.
+You must have GTK with Python extensions installed in order to use pywebview.
 
 #### GTK
 
