@@ -346,14 +346,15 @@ def launch_game(
         extra_opts = settings.get("opts")
     if not extra_opts or not isinstance(extra_opts, list):
         extra_opts = []
-    user_opts_set = set(extra_opts)
-    noborder_check_opts = ["-sw", "-fullscreen", "-windowed", "-noborder"]
-    use_noborder = True
-    for opt in noborder_check_opts:
-        if opt in user_opts_set:
-            use_noborder = False
-    if use_noborder:
-        default_args += ["-sw", "-noborder"]
+    if sys.platform.startswith("win"):
+        noborder_check_opts = ["-sw", "-windowed", "-noborder", "-full", "-fullscreen"]
+        user_opts_set = set(extra_opts)
+        use_noborder = True
+        for opt in noborder_check_opts:
+            if opt in user_opts_set:
+                use_noborder = False
+        if use_noborder:
+            default_args += ["-sw", "-noborder"]
     cmd = [str(exe_path)] + default_args + extra_opts + default_cmds
 
     # Launch the game
