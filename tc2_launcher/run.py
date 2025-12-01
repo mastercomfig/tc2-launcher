@@ -167,10 +167,29 @@ def _download(url: str, dest_path: Path) -> None:
                     f.write(chunk)
 
 
+# https://stackoverflow.com/a/54748564
+class ZipFileWithPermissions(zipfile.ZipFile):
+    """ Custom ZipFile class handling file permissions. """
+    def _extract_member(self, member, targetpath, pwd):
+        if not isinstance(member, zipfile.ZipInfo):
+            member = self.getinfo(member)
+
+        targetpath = super()._extract_member(member, targetpath, pwd)
+
+        attr = member.external_attr >> 16
+        if attr != 0:
+            os.chmod(targetpath, attr)
+        return targetpath
+
+
 def _extract_zip_if_needed(zip_path: Path, extract_dir: Path):
     extract_dir.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(extract_dir)
+    if os.name == "posix":
+        with ZipFileWithPermissions(zip_path, "r") as zf:
+            zf.extractall(extract_dir)
+    else:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(extract_dir)
 
 
 def update_archive(
@@ -252,7 +271,7 @@ def update_archive(
 
 def run_non_blocking(cmd: list[str], cwd: Optional[Path] = None) -> None:
     if os.name == "posix":
-        cmd.insert("nohup", 0)
+        cmd.insert(0, "nohup")
         cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
 
     try:
@@ -263,7 +282,9 @@ def run_non_blocking(cmd: list[str], cwd: Optional[Path] = None) -> None:
                 shell=True,
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
                 | subprocess.CREATE_DEFAULT_ERROR_MODE,
-                close_fds=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
         elif os.name == "posix":
             subprocess.Popen(
@@ -271,7 +292,6 @@ def run_non_blocking(cmd: list[str], cwd: Optional[Path] = None) -> None:
                 cwd=str(cwd) if cwd else None,
                 shell=True,
                 start_new_session=True,
-                close_fds=True,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
