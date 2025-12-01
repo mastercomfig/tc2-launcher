@@ -12,7 +12,7 @@ from tc2_launcher.run import set_launch_options
 from tc2_launcher.run import default_dest_dir
 from tc2_launcher.run import clean_self_update, update_self
 
-version = "0.4.0"
+version = "0.5.0"
 
 
 def main():
