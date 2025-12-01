@@ -257,8 +257,8 @@ def run_non_blocking(cmd: list[str], cwd: Optional[Path] = None) -> None:
                 cmd,
                 cwd=str(cwd) if cwd else None,
                 shell=True,
-                creationflags=subprocess.DETACHED_PROCESS
-                | subprocess.CREATE_NEW_PROCESS_GROUP,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                | subprocess.CREATE_DEFAULT_ERROR_MODE,
                 close_fds=True,
             )
         elif os.name == "posix":
@@ -310,14 +310,24 @@ def launch_game(
     settings = read_settings(dest)
     # TODO: condebug prevents an access violation crash to stdout or something, need to fix the Popen call eventually
     if sys.platform.startswith("win"):
-        default_base = ["-steam", "-particles", "1", "+ip", "127.0.0.1", "-condebug", "-noborder"]
+        default_args = ["-steam", "-particles", "1", "-condebug"]
+        default_cmds = ["+ip", "127.0.0.1"]
     else:
-        default_base = ["-condebug", "-noborder"]
+        default_args = ["-condebug"]
+        default_cmds = []
     if not extra_opts:
         extra_opts = settings.get("opts")
     if not extra_opts or not isinstance(extra_opts, list):
         extra_opts = []
-    cmd = [str(exe_path)] + default_base + extra_opts
+    user_opts_set = set(extra_opts)
+    noborder_check_opts = ["-sw", "-fullscreen", "-windowed", "-noborder"]
+    use_noborder = True
+    for opt in noborder_check_opts:
+        if opt in user_opts_set:
+            use_noborder = False
+    if use_noborder:
+        default_args += ["-sw", "-noborder"]
+    cmd = [str(exe_path)] + default_args + extra_opts + default_cmds
 
     # Launch the game
     print(f"Launching: {' '.join(cmd)}")
