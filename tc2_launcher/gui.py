@@ -70,7 +70,7 @@ def start_gui():
         window.events.loaded += lambda: on_loaded(window)
         try:
             webview.start(icon=str(entry_parent / "favicon.ico"))
-        except webview.errors.WebViewException as e:
+        except Exception as e:
             if os.name == "posix":
                 subprocess.run(["/usr/bin/notify-send", "--icon=error", f"TC2 Launcher Error: {e}"])
             raise e
