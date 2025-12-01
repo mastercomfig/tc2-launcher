@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import stat
 from pathlib import Path
 from typing import Optional, Tuple
 from shutil import rmtree
@@ -97,7 +98,9 @@ def update_self(current_version: str) -> bool:
     print("Launching self-update...")
     try:
         filtered_args = [arg for arg in sys.argv[1:] if arg != "--replace"]
-        run_non_blocking([download_path, "--replace", current_path] + filtered_args)
+        if os.name == "posix":
+            download_path.chmod(download_path.stat().st_mode | stat.S_IEXEC)
+        run_non_blocking([str(download_path), "--replace", str(current_path)] + filtered_args)
         sys.exit(0)
         return True
     except Exception as e:
