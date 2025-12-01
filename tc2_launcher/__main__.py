@@ -1,16 +1,20 @@
 import argparse
 import multiprocessing
-import time
+import sys
 from pathlib import Path
 from shutil import copyfile
-import sys
+from time import sleep
+from timeit import default_timer as timer
 
 from tc2_launcher.gui import start_gui
-from tc2_launcher.run import update_archive
-from tc2_launcher.run import launch_game
-from tc2_launcher.run import set_launch_options
-from tc2_launcher.run import default_dest_dir
-from tc2_launcher.run import clean_self_update, update_self
+from tc2_launcher.run import (
+    clean_self_update,
+    default_dest_dir,
+    launch_game,
+    set_launch_options,
+    update_archive,
+    update_self,
+)
 
 version = "0.5.0"
 
@@ -19,15 +23,25 @@ def main():
     launch_gui = False
     if len(sys.argv) >= 3 and sys.argv[1] == "--replace":
         # Replacement mode after self-update
-        original_path = Path(sys.argv[2]).resolve()
-        current_path = Path(sys.argv[0]).resolve()
         try:
-            # Wait a moment to ensure the original process has exited
-            time.sleep(2)
-            # Replace the original file with the current file
-            original_path.unlink()
-            copyfile(current_path, original_path)
-            print("Self-update applied successfully.")
+            original_path = Path(sys.argv[2]).resolve()
+            if original_path.exists() and original_path.is_file():
+                current_path = Path(sys.argv[0]).resolve()
+                # wait for the original process to exit
+                time_limit = 5
+                while time_limit > 0:
+                    try:
+                        # attempt to delete the original file
+                        original_path.unlink(missing_ok=True)
+                        break
+                    except Exception:
+                        # wait a moment before trying again
+                        before = timer()
+                        sleep(0.1)
+                        time_limit -= timer() - before
+                # replace the original file with the current file
+                copyfile(current_path, original_path)
+                print("Self-update applied successfully.")
         except Exception as e:
             print(f"ERROR: Failed to apply self-update: {e}")
 
@@ -72,7 +86,7 @@ def main():
         nargs=argparse.REMAINDER,
         help="User launch options",
     )
-    
+
     if launch_gui:
         start_gui()
         return
@@ -82,8 +96,18 @@ def main():
     dest_dir = args.dest
     dest = None
     if dest_dir:
-        dest = Path(dest_dir).resolve()
-        if dest.exists() and not dest.is_dir():
+        try:
+            dest = Path(dest_dir).resolve()
+        except Exception as e:
+            print(f"ERROR: Invalid destination path '{dest_dir}': {e}")
+            return
+        if not dest.exists():
+            try:
+                dest.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                print(f"ERROR: Failed to create destination directory '{dest}': {e}")
+                return
+        elif not dest.is_dir():
             print(f"ERROR: Destination '{dest}' exists and is not a directory.")
             return
     else:
@@ -96,10 +120,10 @@ def main():
 
     # Persistence of options
     if args.save_opts:
-        set_launch_options(dest=dest, options=args.opts)
+        set_launch_options(dest=dest, extra_options=args.opts)
 
     if args.launch:
-        launch_game(dest=dest, extra_opts=args.opts)
+        launch_game(dest=dest, extra_options=args.opts)
 
 
 if __name__ == "__main__":

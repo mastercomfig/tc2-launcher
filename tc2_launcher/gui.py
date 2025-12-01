@@ -1,16 +1,17 @@
 import os
 import subprocess
+import sys
+from pathlib import Path
 
 import webview
 
-from pathlib import Path
-
 from tc2_launcher.run import (
+    change_install_folder,
     get_launch_options,
-    open_install_folder,
-    update_archive,
     launch_game,
+    open_install_folder,
     set_launch_options,
+    update_archive,
 )
 
 
@@ -23,7 +24,7 @@ class Api:
             options = options.split()
         else:
             options = None
-        set_launch_options(options=options)
+        set_launch_options(extra_options=options)
 
     def open_install_folder(self):
         open_install_folder()
@@ -31,6 +32,18 @@ class Api:
     def check_for_updates(self):
         res = update_archive()
         webview.windows[0].evaluate_js(f"archiveReady({res});")
+
+    def move_install_folder(self):
+        try:
+            result = webview.windows[0].create_file_dialog(webview.FileDialog.FOLDER)
+            if not result:
+                return
+            path = result[0]
+            new_game_dir = Path(path).resolve()
+            change_install_folder(new_game_dir)
+        except Exception as e:
+            print(f"ERROR: Invalid path: {e}")
+            return
 
 
 def get_entrypoint():
@@ -60,19 +73,21 @@ entry_parent = entry_path.parent
 
 
 def start_gui():
-    opts = get_launch_options()
-    opt_str = " ".join(opts)
+    extra_options = get_launch_options()
+    extra_options_str = " ".join(extra_options)
     window = webview.create_window(
         "Team Comtress Launcher", entry, js_api=Api(), min_size=(640, 360)
     )
     if window:
-        window.state.opts = opt_str
+        window.state.opts = extra_options_str
         window.events.loaded += lambda: on_loaded(window)
         try:
             webview.start(icon=str(entry_parent / "favicon.ico"))
         except Exception as e:
-            if os.name == "posix":
-                subprocess.run(["/usr/bin/notify-send", "--icon=error", f"TC2 Launcher Error: {e}"])
+            if os.name == "posix" and sys.platform != "darwin":
+                subprocess.run(
+                    ["/usr/bin/notify-send", "--icon=error", f"TC2 Launcher Error: {e}"]
+                )
             raise e
     else:
         print("Failed to create webview window.")

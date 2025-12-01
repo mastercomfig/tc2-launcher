@@ -147,8 +147,8 @@
         <div id="launch-bar">
             <div class="spacer"></div>
             <div class="game-menu">
-                <span class="info-label" style="display: none">Offline mode</span>
-                <button id="launch-btn" class="btn btn-primary btn-lg" disabled>Updating...</button>
+                <span class="info-label show-offline" style="display: none">Offline mode</span>
+                <button id="launch-btn" class="btn btn-primary btn-lg requires-available" disabled>Updating...</button>
                 <button id="update-btn" class="btn btn-secondary btn-lg" title="Check for updates" disabled>
                     <svg width="24" height="20" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path
@@ -177,13 +177,53 @@
         <h2>Launch Options</h2>
         <input id="launch-options" type="text"></input>
         <h2>Install Folder</h2>
-        <button id="folder-btn" class="btn btn-secondary" disabled>Browse Install Folder</button>
+        <button id="open-folder-btn" class="btn btn-secondary requires-available" disabled>Browse Install Folder</button>
+        <button id="move-folder-btn" class="btn btn-secondary requires-available" disabled>Move Install Folder</button>
     </div>
     <script>
+        function refreshAvailable(available) {
+            if (available && !document.getElementById("update-btn").disabled) {
+                document.querySelectorAll(".requires-available").forEach(el => el.disabled = false);
+            } else {
+                document.querySelectorAll(".requires-available").forEach(el => el.disabled = true);
+            }
+        }
+        
+        function archiveReady(error) {
+            const online = error <= 0;
+            const hasErr = error !== 0;
+            const errLevel = Math.abs(error);
+            const available = errLevel <= 1;
+            document.getElementById("update-btn").disabled = false;
+            refreshAvailable(available);
+            if (available) {
+                document.getElementById("launch-btn").innerText = "Launch";
+            } else {
+                document.getElementById("launch-btn").innerText = "Install failed";
+            }
+            if (online) {
+                document.querySelector(".show-offline").style.display = "none";
+            } else {
+                document.querySelector(".show-offline").style.display = "inline";
+            }
+        }
+
         document.getElementById("launch-btn").addEventListener("click", () => {
+            if (document.getElementById("launch-btn").disabled) {
+                return;
+            }
             window.pywebview.api.launch_game();
+            document.getElementById("launch-btn").disabled = true;
+            document.getElementById("launch-btn").innerText = "Launching...";
+            setTimeout(() => {
+                document.getElementById("launch-btn").disabled = false;
+                document.getElementById("launch-btn").innerText = "Launch";
+            }, 1000);
         });
         document.getElementById("settings-btn").addEventListener("click", () => {
+            if (document.getElementById("settings-btn").disabled) {
+                return;
+            }
             const menu = document.getElementById("settings-menu");
             if (menu.style.display === "block") {
                 menu.style.display = "none";
@@ -194,8 +234,17 @@
         document.getElementById("launch-options").addEventListener("input", (event) => {
             window.pywebview.api.set_launch_options(event.target.value);
         });
-        document.getElementById("folder-btn").addEventListener("click", () => {
+        document.getElementById("open-folder-btn").addEventListener("click", () => {
+            if (document.getElementById("open-folder-btn").disabled) {
+                return;
+            }
             window.pywebview.api.open_install_folder();
+        });
+        document.getElementById("move-folder-btn").addEventListener("click", () => {
+            if (document.getElementById("move-folder-btn").disabled) {
+                return;
+            }
+            window.pywebview.api.move_install_folder();
         });
         document.getElementById("update-btn").addEventListener("click", () => {
             if (document.getElementById("update-btn").disabled) {
@@ -203,31 +252,9 @@
             }
             document.getElementById("update-btn").disabled = true;
             document.getElementById("launch-btn").innerText = "Updating...";
-            document.getElementById("launch-btn").disabled = true;
-            document.getElementById("folder-btn").disabled = true;
+            refreshAvailable(false);
             window.pywebview.api.check_for_updates();
         });
-        function archiveReady(error) {
-            const online = error <= 0;
-            const hasErr = error !== 0;
-            const errLevel = Math.abs(error);
-            const available = errLevel <= 1;
-            document.getElementById("update-btn").disabled = false;
-            if (available) {
-                document.getElementById("launch-btn").disabled = false;
-                document.getElementById("folder-btn").disabled = false;
-                document.getElementById("launch-btn").innerText = "Launch";
-            } else {
-                document.getElementById("launch-btn").disabled = true;
-                document.getElementById("folder-btn").disabled = true;
-                document.getElementById("launch-btn").innerText = "Install failed";
-            }
-            if (online) {
-                document.querySelector(".info-label").style.display = "none";
-            } else {
-                document.querySelector(".info-label").style.display = "inline";
-            }
-        }
 
         window.addEventListener("pywebviewready", () => {
             document.getElementById("launch-options").value = window.pywebview?.state?.opts || "";

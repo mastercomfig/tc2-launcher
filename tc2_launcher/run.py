@@ -1,15 +1,14 @@
-import os
-import sys
 import json
+import os
 import stat
+import subprocess
+import sys
+import tempfile
+import zipfile
 from pathlib import Path
-from typing import Optional, Tuple
-from shutil import rmtree
+from shutil import copytree, rmtree
 
 import requests
-import subprocess
-import zipfile
-
 
 TC2_REPO = "mastercomfig/tc2"
 LAUNCHER_REPO = "mastercomfig/tc2-launcher"
@@ -35,10 +34,10 @@ def default_dest_dir() -> Path:
     if not base:
         base = fallback
 
-    if not base.exists():
-        base.mkdir(parents=True, exist_ok=True)
-
-    return base / "TC2Launcher"
+    dest = base / "TC2Launcher"
+    if not dest.exists():
+        dest.mkdir(parents=True, exist_ok=True)
+    return dest
 
 
 def _get_latest_release(repo: str) -> dict:
@@ -49,7 +48,7 @@ def _get_latest_release(repo: str) -> dict:
     return resp.json()
 
 
-def _find_asset(release: dict, asset_filter: str) -> Optional[Tuple[str, str]]:
+def _find_asset(release: dict, asset_filter: str) -> tuple[str, str] | None:
     assets = release.get("assets", [])
     for a in assets:
         name = a.get("name", "")
@@ -100,7 +99,9 @@ def update_self(current_version: str) -> bool:
         filtered_args = [arg for arg in sys.argv[1:] if arg != "--replace"]
         if os.name == "posix":
             download_path.chmod(download_path.stat().st_mode | stat.S_IEXEC)
-        run_non_blocking([str(download_path), "--replace", str(current_path)] + filtered_args)
+        run_non_blocking(
+            [str(download_path), "--replace", str(current_path)] + filtered_args
+        )
         sys.exit(0)
         return True
     except Exception as e:
@@ -128,34 +129,37 @@ def _read_data(path: Path) -> dict:
 
 
 def _write_data(path: Path, data: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def _state_path(dest: Path) -> Path:
+def _state_path(dest: Path | None = None) -> Path:
+    if not dest:
+        dest = default_dest_dir()
     return dest / "state.json"
 
 
-def read_state(dest: Path) -> dict:
+def read_state(dest: Path | None = None) -> dict:
     path = _state_path(dest)
     return _read_data(path)
 
 
-def write_state(dest: Path, state: dict) -> None:
+def write_state(dest: Path | None, state: dict) -> None:
     path = _state_path(dest)
     _write_data(path, state)
 
 
-def _settings_path(dest: Path) -> Path:
+def _settings_path(dest: Path | None = None) -> Path:
+    if not dest:
+        dest = default_dest_dir()
     return dest / "settings.json"
 
 
-def read_settings(dest: Path) -> dict:
+def read_settings(dest: Path | None = None) -> dict:
     path = _settings_path(dest)
     return _read_data(path)
 
 
-def write_settings(dest: Path, settings: dict) -> None:
+def write_settings(dest: Path | None, settings: dict) -> None:
     path = _settings_path(dest)
     _write_data(path, settings)
 
@@ -172,7 +176,8 @@ def _download(url: str, dest_path: Path) -> None:
 
 # https://stackoverflow.com/a/54748564
 class ZipFileWithPermissions(zipfile.ZipFile):
-    """ Custom ZipFile class handling file permissions. """
+    """Custom ZipFile class handling file permissions."""
+
     def _extract_member(self, member, targetpath, pwd):
         if not isinstance(member, zipfile.ZipInfo):
             member = self.getinfo(member)
@@ -185,7 +190,7 @@ class ZipFileWithPermissions(zipfile.ZipFile):
         return targetpath
 
 
-def _extract_zip_if_needed(zip_path: Path, extract_dir: Path):
+def _extract_zip(zip_path: Path, extract_dir: Path):
     extract_dir.mkdir(parents=True, exist_ok=True)
     if os.name == "posix":
         with ZipFileWithPermissions(zip_path, "r") as zf:
@@ -238,33 +243,36 @@ def update_archive(
     print(f"Latest release tag: {tag}")
     print(f"Current release tag: {current_tag}")
     print(f"Selected asset: {asset_name}")
-    print(f"Destination: {dest}")
 
-    asset_path = dest / asset_name
-    game_dir = dest / "game"
+    # asset_path = dest / asset_name
+    with tempfile.TemporaryDirectory(
+        prefix="TC2Launcher", ignore_cleanup_errors=True
+    ) as tmp_dir_name:
+        asset_path = Path(tmp_dir_name) / asset_name
+        game_dir = get_game_dir(dest)
 
-    print(f"Downloading latest asset to {asset_path}...")
-    try:
-        _download(download_url, asset_path)
-    except Exception as e:
-        print(f"ERROR: Failed to download asset: {e}")
-        return fail_code
-    print("Download complete.")
+        print(f"Downloading latest asset to {asset_path}...")
+        try:
+            _download(download_url, asset_path)
+        except Exception as e:
+            print(f"ERROR: Failed to download asset: {e}")
+            return fail_code
+        print("Download complete.")
 
-    print("Extracting asset...")
-    if asset_name.lower().endswith(".zip") and asset_path.exists():
-        _extract_zip_if_needed(asset_path, game_dir)
+        print(f"Extracting asset to {game_dir}...")
+        if asset_name.lower().endswith(".zip") and asset_path.exists():
+            _extract_zip(asset_path, game_dir)
 
     if not game_dir.exists():
         print(f"ERROR: Game directory '{game_dir}' does not exist after extraction.")
         return fail_code
 
-    print("Extraction complete.")
-
     exe_path = _get_game_exe(dest)
     if not exe_path:
         print(f"ERROR: Could not locate game executable after update.")
         return -2
+
+    print("Extraction complete.")
 
     state["tag"] = tag
     write_state(dest, state)
@@ -272,7 +280,7 @@ def update_archive(
     return 0
 
 
-def run_non_blocking(cmd: list[str], cwd: Optional[Path] = None) -> None:
+def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
     if os.name == "posix":
         cmd.insert(0, "nohup")
         cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
@@ -303,11 +311,30 @@ def run_non_blocking(cmd: list[str], cwd: Optional[Path] = None) -> None:
         print(f"Failed to run command {' '.join(cmd)}: {e}")
 
 
-def _get_game_exe(dest: Path | None) -> Optional[Path]:
+def get_game_dir(dest: Path | None = None) -> Path:
+    settings = read_settings(dest)
+
+    user_game_dir = settings.get("game_dir")
+    if user_game_dir:
+        try:
+            dest = Path(user_game_dir).resolve()
+            dest.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"ERROR: Failed to use specified game directory '{dest}': {e}")
+        if dest and dest.exists() and dest.is_dir():
+            return dest
+
     if not dest:
         dest = default_dest_dir()
 
-    game_dir = dest / "game"
+    return dest / "game"
+
+
+def _get_game_exe(dest: Path | None) -> Path | None:
+    if not dest:
+        dest = default_dest_dir()
+
+    game_dir = get_game_dir(dest)
 
     # Determine executable based on platform
     exe_path = None
@@ -323,7 +350,7 @@ def _get_game_exe(dest: Path | None) -> Optional[Path]:
 
 def launch_game(
     dest: Path | None = None,
-    extra_opts: Optional[list[str]] = None,
+    extra_options: list[str] | None = None,
 ) -> None:
     if not dest:
         dest = default_dest_dir()
@@ -342,20 +369,20 @@ def launch_game(
     else:
         default_args = ["-condebug"]
         default_cmds = []
-    if not extra_opts:
-        extra_opts = settings.get("opts")
-    if not extra_opts or not isinstance(extra_opts, list):
-        extra_opts = []
+    if not extra_options:
+        extra_options = settings.get("opts")
+    if not extra_options or not isinstance(extra_options, list):
+        extra_options = []
     if sys.platform.startswith("win"):
         noborder_check_opts = ["-sw", "-windowed", "-noborder", "-full", "-fullscreen"]
-        user_opts_set = set(extra_opts)
+        extra_options_set = set(extra_options)
         use_noborder = True
         for opt in noborder_check_opts:
-            if opt in user_opts_set:
+            if opt in extra_options_set:
                 use_noborder = False
         if use_noborder:
             default_args += ["-sw", "-noborder"]
-    cmd = [str(exe_path)] + default_args + extra_opts + default_cmds
+    cmd = [str(exe_path)] + default_args + extra_options + default_cmds
 
     # Launch the game
     print(f"Launching: {' '.join(cmd)}")
@@ -370,21 +397,21 @@ def get_launch_options(dest: Path | None = None) -> list[str]:
         dest = default_dest_dir()
 
     settings = read_settings(dest)
-    options = settings.get("opts")
-    if options and isinstance(options, list):
-        return options
+    extra_options = settings.get("opts")
+    if extra_options and isinstance(extra_options, list):
+        return extra_options
     return []
 
 
 def set_launch_options(
-    dest: Path | None = None, options: list[str] | None = None
+    dest: Path | None = None, extra_options: list[str] | None = None
 ) -> None:
     if not dest:
         dest = default_dest_dir()
 
     settings = read_settings(dest)
-    if options and isinstance(options, list):
-        settings["opts"] = options
+    if extra_options and isinstance(extra_options, list):
+        settings["opts"] = extra_options
     else:
         settings.pop("opts", None)
     write_settings(dest, settings)
@@ -394,14 +421,38 @@ def open_install_folder(dest: Path | None = None) -> None:
     if not dest:
         dest = default_dest_dir()
 
-    game_dir = dest / "game"
+    game_dir = get_game_dir(dest)
     if game_dir.exists() and game_dir.is_dir():
         if sys.platform.startswith("win"):
             os.startfile(game_dir)
-        elif sys.platform.startswith("darwin"):
+        elif sys.platform == "darwin":
             subprocess.Popen(["open", game_dir])
         else:
             subprocess.Popen(["xdg-open", game_dir])
+
+
+def change_install_folder(new_game_dir: Path):
+    try:
+        new_game_dir = new_game_dir.resolve()
+        new_game_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        print(f"ERROR: Invalid path '{new_game_dir}': {e}")
+        return
+
+    old_game_dir = get_game_dir()
+    success = False
+    if old_game_dir.exists():
+        try:
+            copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
+            success = True
+            rmtree(old_game_dir)
+        except Exception as e:
+            print(f"ERROR: Failed to move game directory: {e}")
+
+    if success:
+        settings = read_settings()
+        settings["game_dir"] = str(new_game_dir)
+        write_settings(dest=None, settings=settings)
 
 
 def uninstall_launcher(dest: Path | None = None) -> bool:
