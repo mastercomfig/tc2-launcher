@@ -29,16 +29,22 @@ def main():
                 current_path = Path(sys.argv[0]).resolve()
                 # wait for the original process to exit
                 time_limit = 5
+                success = False
+                last_exc = None
                 while time_limit > 0:
                     try:
                         # attempt to delete the original file
                         original_path.unlink(missing_ok=True)
+                        success = True
                         break
-                    except Exception:
+                    except Exception as e:
+                        last_exc = e
                         # wait a moment before trying again
                         before = timer()
                         sleep(0.1)
                         time_limit -= timer() - before
+                if not success:
+                    raise last_exc or Exception("Unknown error deleting original file")
                 # replace the original file with the current file
                 copyfile(current_path, original_path)
                 print("Self-update applied successfully.")
@@ -84,7 +90,7 @@ def main():
     parser.add_argument(
         "--opts",
         nargs=argparse.REMAINDER,
-        help="User launch options",
+        help="User launch options. Use at the very end of the command line, as all remaining arguments are used as launch options.",
     )
 
     if launch_gui:

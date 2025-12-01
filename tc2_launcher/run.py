@@ -6,7 +6,7 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
-from shutil import copytree, rmtree
+from shutil import move, rmtree
 
 import requests
 
@@ -102,7 +102,6 @@ def update_self(current_version: str) -> bool:
         run_non_blocking(
             [str(download_path), "--replace", str(current_path)] + filtered_args
         )
-        sys.exit(0)
         return True
     except Exception as e:
         print(f"Failed to launch self-update: {e}")
@@ -294,8 +293,8 @@ def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
                 | subprocess.CREATE_DEFAULT_ERROR_MODE,
                 stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
         elif os.name == "posix":
             subprocess.Popen(
@@ -304,8 +303,8 @@ def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
                 shell=True,
                 start_new_session=True,
                 stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
     except Exception as e:
         print(f"Failed to run command {' '.join(cmd)}: {e}")
@@ -440,19 +439,16 @@ def change_install_folder(new_game_dir: Path):
         return
 
     old_game_dir = get_game_dir()
-    success = False
     if old_game_dir.exists():
         try:
-            copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
-            success = True
-            rmtree(old_game_dir)
+            move(old_game_dir, new_game_dir)
         except Exception as e:
             print(f"ERROR: Failed to move game directory: {e}")
+            return
 
-    if success:
-        settings = read_settings()
-        settings["game_dir"] = str(new_game_dir)
-        write_settings(dest=None, settings=settings)
+    settings = read_settings()
+    settings["game_dir"] = str(new_game_dir)
+    write_settings(dest=None, settings=settings)
 
 
 def uninstall_launcher(dest: Path | None = None) -> bool:
