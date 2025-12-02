@@ -1,6 +1,6 @@
 [project]
 name = "tc2-launcher"
-version = "0.5.0"
+version = "0.6.0"
 description = ""
 authors = [
     {name = "mastercoms",email = "mastercoms@tuta.io"}

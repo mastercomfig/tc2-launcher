@@ -16,7 +16,7 @@ from tc2_launcher.run import (
     update_self,
 )
 
-version = "0.5.0"
+version = "0.6.0"
 
 
 def main():
