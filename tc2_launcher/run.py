@@ -4,10 +4,14 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import zipfile
 from pathlib import Path
 from shutil import move, rmtree
+from time import sleep
+from timeit import default_timer as timer
 
+import psutil
 import requests
 
 TC2_REPO = "mastercomfig/tc2"
@@ -329,6 +333,14 @@ def get_game_dir(dest: Path | None = None) -> Path:
     return dest / "game"
 
 
+def _get_game_exe_name(running_process: bool = False) -> str:
+    # Determine executable name based on platform
+    if sys.platform.startswith("win"):
+        return "tc2_win64.exe"
+    else:
+        return "tc2_linux64" if running_process else "tc2.sh"
+
+
 def _get_game_exe(dest: Path | None) -> Path | None:
     if not dest:
         dest = default_dest_dir()
@@ -336,11 +348,7 @@ def _get_game_exe(dest: Path | None) -> Path | None:
     game_dir = get_game_dir(dest)
 
     # Determine executable based on platform
-    exe_path = None
-    if sys.platform.startswith("win"):
-        exe_path = game_dir / "tc2_win64.exe"
-    else:
-        exe_path = game_dir / "tc2.sh"
+    exe_path = game_dir / _get_game_exe_name()
 
     if exe_path and exe_path.exists():
         return exe_path
@@ -389,6 +397,35 @@ def launch_game(
         run_non_blocking(cmd, cwd=exe_path.parent)
     except Exception as e:
         print(f"Failed to launch game: {e}")
+
+
+def _wait_game_exit_inner(pid, callback):
+    try:
+        p = psutil.Process(pid)
+        p.wait()
+        callback()
+    except Exception:
+        pass
+
+
+def wait_game_exit(pid, callback):
+    wait_game_exit_thread = threading.Thread(
+        target=_wait_game_exit_inner, args=(pid, callback)
+    )
+    wait_game_exit_thread.start()
+
+
+def wait_game_running() -> int | None:
+    game_exe_name = _get_game_exe_name(running_process=True)
+    time_limit = 5
+    while time_limit > 0:
+        for p in psutil.process_iter(["pid", "name"]):
+            if p.info["name"] == game_exe_name:
+                return p.pid
+        before = timer()
+        sleep(0.2)
+        time_limit -= timer() - before
+    return None
 
 
 def get_launch_options(dest: Path | None = None) -> list[str]:
