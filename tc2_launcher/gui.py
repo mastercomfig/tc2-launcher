@@ -1,7 +1,10 @@
+import multiprocessing
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
+from typing import Optional
 
 import webview
 
@@ -28,14 +31,14 @@ def get_entrypoint():
         if path.exists():
             return path
 
-    queries = ["../gui/index.html", "../Resources/gui/index.html", "./gui/index.html"]
+    queries = ["../gui", "../Resources/gui", "./gui"]
 
     for query in queries:
         result = exists(query)
         if result:
             return result
 
-    raise Exception("No index.html found")
+    raise Exception("No gui directory found")
 
 
 class Api:
@@ -93,21 +96,74 @@ def check_launch_game(time_limit: float = 0):
         return False
 
 
+def check_queue():
+    while True:
+        if not current_queue:
+            return
+        cmd = current_queue.get()
+        if cmd == "close":
+            close_gui()
+            return
+
+
 def on_loaded(window):
+    if current_queue:
+        threading.Thread(target=check_queue).start()
+    if current_entry != "index":
+        return
     if not check_launch_game(-1):
         update_and_notify(window)
 
 
-entry_path = get_entrypoint()
-entry = str(entry_path)
-entry_parent = entry_path.parent
+entry_parent = get_entrypoint()
+current_entry: str | None = None
+current_queue: Optional[multiprocessing.Queue] = None
 
 
-def start_gui():
+def close_gui():
+    window = get_window()
+    window.destroy()
+
+
+def start_gui_separate(entry_name: str = "index", **kwargs):
+    q = multiprocessing.Queue()
+    p = multiprocessing.Process(
+        target=_start_gui_private, args=(entry_name, q), kwargs=kwargs
+    )
+    p.start()
+    return p, q
+
+
+def start_gui(entry_name: str = "index", **kwargs):
+    _start_gui_private(entry_name, **kwargs)
+
+
+def _start_gui_private(
+    entry_name: str = "index", queue: Optional[multiprocessing.Queue] = None, **kwargs
+):
+    global current_entry
+    global current_queue
     extra_options = get_launch_options()
     extra_options_str = " ".join(extra_options)
+    entry = str(entry_parent / f"{entry_name}.html")
+    current_entry = entry_name
+    current_queue = queue
+    width = 800
+    height = 600
+    min_size = (640, 360)
+    if entry_name == "update":
+        width = 400
+        height = 533
+        min_size = (400, 533)
     window = webview.create_window(
-        "Team Comtress Launcher", entry, js_api=Api(), min_size=(640, 360)
+        "Team Comtress Launcher",
+        entry,
+        js_api=Api(),
+        min_size=min_size,
+        width=width,
+        height=height,
+        background_color="#212121",
+        **kwargs,
     )
     if window:
         window.state.opts = extra_options_str

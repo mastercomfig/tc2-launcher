@@ -1,12 +1,15 @@
 import argparse
 import multiprocessing
+import queue
 import sys
+import threading
 from pathlib import Path
 from shutil import copyfile
 from time import sleep
 from timeit import default_timer as timer
+from typing import Optional
 
-from tc2_launcher.gui import start_gui
+from tc2_launcher.gui import close_gui, start_gui, start_gui_separate
 from tc2_launcher.run import (
     DEV_INSTANCE,
     clean_self_update,
@@ -19,10 +22,42 @@ from tc2_launcher.run import (
 
 version = "0.6.0"
 
+updater_thread_queue: Optional[queue.Queue] = None
+should_launch_updater = True
+
+
+def updater_thread():
+    global updater_thread_queue
+    sleep(0.5)
+    if not should_launch_updater:
+        return
+    p, q = start_gui_separate("update", frameless=True, easy_drag=True)
+    if updater_thread_queue:
+        q.put(updater_thread_queue.get())
+    updater_thread_queue = None
+
+
+def start_updater_gui():
+    global updater_thread_queue
+    updater_thread_queue = queue.Queue()
+    threading.Thread(target=updater_thread).start()
+
+
+def close_updater_gui():
+    global updater_thread_queue
+    if updater_thread_queue:
+        updater_thread_queue.put("close")
+
 
 def main():
+    global should_launch_updater
     launch_gui = False
     if len(sys.argv) >= 3 and sys.argv[1] == "--replace":
+        launch_gui = len(sys.argv) == 3
+
+        if launch_gui:
+            start_updater_gui()
+
         # Replacement mode after self-update
         try:
             original_path = Path(sys.argv[2]).resolve()
@@ -52,13 +87,18 @@ def main():
         except Exception as e:
             print(f"ERROR: Failed to apply self-update: {e}")
 
-        launch_gui = len(sys.argv) == 3
+        close_updater_gui()
     else:
+        launch_gui = len(sys.argv) == 1
+        if launch_gui:
+            start_updater_gui()
+
         if not DEV_INSTANCE and update_self(version):
             sys.exit(0)
             return
 
-        launch_gui = len(sys.argv) == 1
+        should_launch_updater = False
+        close_updater_gui()
 
         clean_self_update()
 
