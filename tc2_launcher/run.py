@@ -7,7 +7,7 @@ import tempfile
 import threading
 import zipfile
 from pathlib import Path
-from shutil import move, rmtree
+from shutil import copytree, rmtree
 from time import sleep
 from timeit import default_timer as timer
 
@@ -369,12 +369,11 @@ def launch_game(
 
     # Resolve options with persistence
     settings = read_settings(dest)
-    # TODO: condebug prevents an access violation crash to stdout or something, need to fix the Popen call eventually
     if sys.platform.startswith("win"):
-        default_args = ["-steam", "-particles", "1", "-condebug"]
+        default_args = ["-steam", "-particles", "1"]
         default_cmds = ["+ip", "127.0.0.1"]
     else:
-        default_args = ["-condebug"]
+        default_args = []
         default_cmds = []
     if not extra_options:
         extra_options = settings.get("opts")
@@ -478,7 +477,8 @@ def change_install_folder(new_game_dir: Path):
     old_game_dir = get_game_dir()
     if old_game_dir.exists():
         try:
-            move(old_game_dir, new_game_dir)
+            copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
+            rmtree(old_game_dir)
         except Exception as e:
             print(f"ERROR: Failed to move game directory: {e}")
             return
