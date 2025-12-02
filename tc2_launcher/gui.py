@@ -6,6 +6,7 @@ from pathlib import Path
 import webview
 
 from tc2_launcher.run import (
+    DEV_INSTANCE,
     change_install_folder,
     get_launch_options,
     launch_game,
@@ -80,8 +81,8 @@ def on_game_exit():
     update_and_notify(window)
 
 
-def check_launch_game():
-    pid = wait_game_running()
+def check_launch_game(time_limit: float = 0):
+    pid = wait_game_running(time_limit)
     has_pid = pid is not None
     res = 2 if has_pid else 0
     get_window().evaluate_js(f"setLaunchState({res});")
@@ -93,11 +94,10 @@ def check_launch_game():
 
 
 def on_loaded(window):
-    if not check_launch_game():
+    if not check_launch_game(-1):
         update_and_notify(window)
 
 
-debug = not getattr(sys, "frozen", False)
 entry_path = get_entrypoint()
 entry = str(entry_path)
 entry_parent = entry_path.parent
@@ -113,7 +113,7 @@ def start_gui():
         window.state.opts = extra_options_str
         window.events.loaded += lambda: on_loaded(window)
         try:
-            webview.start(icon=str(entry_parent / "favicon.ico"), debug=debug)
+            webview.start(icon=str(entry_parent / "favicon.ico"), debug=DEV_INSTANCE)
         except Exception as e:
             if os.name == "posix" and sys.platform != "darwin":
                 subprocess.run(

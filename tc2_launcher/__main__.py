@@ -8,6 +8,7 @@ from timeit import default_timer as timer
 
 from tc2_launcher.gui import start_gui
 from tc2_launcher.run import (
+    DEV_INSTANCE,
     clean_self_update,
     default_dest_dir,
     launch_game,
@@ -53,7 +54,7 @@ def main():
 
         launch_gui = len(sys.argv) == 3
     else:
-        if update_self(version):
+        if not DEV_INSTANCE and update_self(version):
             sys.exit(0)
             return
 

@@ -17,6 +17,8 @@ import requests
 TC2_REPO = "mastercomfig/tc2"
 LAUNCHER_REPO = "mastercomfig/tc2-launcher"
 
+DEV_INSTANCE = not getattr(sys, "frozen", False)
+
 
 def default_dest_dir() -> Path:
     if sys.platform == "darwin":
@@ -414,15 +416,24 @@ def wait_game_exit(pid, callback):
     wait_game_exit_thread.start()
 
 
-def wait_game_running() -> int | None:
+DEFAULT_TIME_LIMIT = 5
+
+
+def wait_game_running(time_limit: float = DEFAULT_TIME_LIMIT) -> int | None:
     game_exe_name = _get_game_exe_name(running_process=True)
-    time_limit = 5
+    interval = 0.2
+    if time_limit == 0:
+        time_limit = DEFAULT_TIME_LIMIT
+    elif time_limit < 0:
+        time_limit = interval
     while time_limit > 0:
         for p in psutil.process_iter(["pid", "name"]):
             if p.info["name"] == game_exe_name:
                 return p.pid
+        if time_limit <= interval:
+            break
         before = timer()
-        sleep(0.2)
+        sleep(interval)
         time_limit -= timer() - before
     return None
 
