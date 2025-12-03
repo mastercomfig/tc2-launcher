@@ -138,6 +138,11 @@ def main():
         start_gui()
         return
 
+    if os.name == "nt":
+        # if on Windows with no GUI, redirect stdio to console
+        sys.stdout = sys.stderr = open('CONOUT$', 'wt')
+        sys.stdin = open('CONIN$', 'rt')
+
     args = parser.parse_args()
 
     dest_dir = args.dest
