@@ -333,6 +333,7 @@ def get_game_dir(dest: Path | None = None) -> Path:
         if os.name == "nt":
             drive = Path.home().drive
             dest = Path(f"{drive}/") / "tc2"
+            return dest
         else:
             dest = default_dest_dir()
 
