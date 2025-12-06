@@ -376,11 +376,17 @@ def launch_game(
 
     # Resolve options with persistence
     settings = read_settings(dest)
+    default_args = [
+        "-steam",
+        "-particles",
+        "1",
+        "-condebug",
+        "-nobreakpad",
+        "-nominidumps",
+    ]
     if sys.platform.startswith("win"):
-        default_args = ["-steam", "-particles", "1"]
         default_cmds = ["+ip", "127.0.0.1"]
     else:
-        default_args = []
         default_cmds = []
     if not extra_options:
         extra_options = settings.get("opts")

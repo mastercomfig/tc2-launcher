@@ -1,6 +1,5 @@
 import argparse
 import multiprocessing
-import os
 import queue
 import sys
 import threading
@@ -138,11 +137,6 @@ def main():
     if launch_gui:
         start_gui()
         return
-
-    if os.name == "nt":
-        # if on Windows with no GUI, redirect stdio to console
-        sys.stdout = sys.stderr = open("CONOUT$", "wt")
-        sys.stdin = open("CONIN$", "rt")
 
     args = parser.parse_args()
 
