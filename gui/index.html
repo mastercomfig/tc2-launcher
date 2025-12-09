@@ -179,6 +179,12 @@
         <h2>Install Folder</h2>
         <button id="open-folder-btn" class="btn btn-secondary" disabled>Browse Install Folder</button>
         <button id="move-folder-btn" class="btn btn-secondary" disabled>Move Install Folder</button>
+        <h2>Updates</h2>
+        <input id="prerelease" type="checkbox"></input>
+        <label for="prerelease">Enable Pre-release Updates</label>
+        <p style="font-size: 1rem;color: #888888">Pre-release updates are less tested, may contain more bugs, and cannot
+            connect to official servers, but they provide access to newer features before they are officially released.
+        </p>
     </div>
     <script>
         let launchState = -1;
@@ -224,7 +230,7 @@
             document.getElementById("move-folder-btn").disabled = launchState !== 0 || !available;
         }
 
-        function updateAvailable() {    
+        function updateAvailable() {
             available = launchState > -1 && errLevel <= 1;
         }
 
@@ -261,7 +267,7 @@
             updateOpenFolderBtnDisabled();
             updateMoveFolderBtnDisabled();
         }
-        
+
         function archiveReady(inErrCode) {
             setErrCode(inErrCode);
             setLaunchState(0);
@@ -307,13 +313,24 @@
             setLaunchState(-1);
             window.pywebview.api.check_for_updates();
         });
+        document.getElementById("prerelease").addEventListener("change", (event) => {
+            if (event.target.checked) {
+                window.pywebview.api.set_prerelease("prerelease");
+            } else {
+                window.pywebview.api.set_prerelease("");
+            }
+            document.getElementById("update-btn").click();
+        });
 
         window.addEventListener("pywebviewready", () => {
             document.getElementById("launch-options").value = window.pywebview?.state?.opts || "";
+            document.getElementById("prerelease").checked = window.pywebview?.state?.branch === "prerelease" ? true : false;
             window.pywebview.state.addEventListener("change", event => {
-                document.getElementById("launch-options").value = window.pywebview.state.opts
+                document.getElementById("launch-options").value = window.pywebview.state.opts;
+                document.getElementById("prerelease").checked = window.pywebview.state.branch === "prerelease" ? true : false;
             })
         })
     </script>
 </body>
+
 </html>

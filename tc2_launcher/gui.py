@@ -12,9 +12,11 @@ from tc2_launcher.run import (
     DEV_INSTANCE,
     change_install_folder,
     get_launch_options,
+    get_prerelease,
     launch_game,
     open_install_folder,
     set_launch_options,
+    set_prerelease,
     update_archive,
     wait_game_exit,
     wait_game_running,
@@ -52,6 +54,10 @@ class Api:
         else:
             options = None
         set_launch_options(extra_options=options)
+
+    def set_prerelease(self, prerelease: str):
+        if isinstance(prerelease, str):
+            set_prerelease(prerelease=prerelease)
 
     def open_install_folder(self):
         open_install_folder()
@@ -145,6 +151,7 @@ def _start_gui_private(
     global current_queue
     extra_options = get_launch_options()
     extra_options_str = " ".join(extra_options)
+    branch = get_prerelease()
     entry = str(entry_parent / f"{entry_name}.html")
     current_entry = entry_name
     current_queue = queue
@@ -167,6 +174,7 @@ def _start_gui_private(
     )
     if window:
         window.state.opts = extra_options_str
+        window.state.branch = branch
         window.events.loaded += lambda: on_loaded(window)
         try:
             webview.start(icon=str(entry_parent / "favicon.ico"), debug=DEV_INSTANCE)

@@ -46,7 +46,22 @@ def default_dest_dir() -> Path:
     return dest
 
 
-def _get_latest_release(repo: str) -> dict:
+def _get_latest_release(dest: Path | None, repo: str) -> dict:
+    if repo == TC2_REPO:
+        if not dest:
+            dest = default_dest_dir()
+
+        settings = read_settings(dest)
+        if settings.get("branch", "") == "prerelease":
+            resp = requests.get(
+                f"https://api.github.com/repos/{repo}/releases",
+                timeout=30,
+                params={"per_page": 1},
+            )
+            resp.raise_for_status()
+            releases = resp.json()
+            return releases[0] if releases else {}
+
     resp = requests.get(
         f"https://api.github.com/repos/{repo}/releases/latest", timeout=30
     )
@@ -65,7 +80,7 @@ def _find_asset(release: dict, asset_filter: str) -> tuple[str, str] | None:
 
 def update_self(current_version: str) -> bool:
     try:
-        release = _get_latest_release(LAUNCHER_REPO)
+        release = _get_latest_release(None, LAUNCHER_REPO)
         tag = release.get("tag_name", "").lstrip("v")
     except Exception as e:
         print(f"ERROR: Failed to get self-update info: {e}")
@@ -219,31 +234,38 @@ def update_archive(
         fail_code = 2
 
     try:
-        release = _get_latest_release(TC2_REPO)
+        release = _get_latest_release(dest, TC2_REPO)
         tag = release.get("tag_name")
         if not tag:
             print("ERROR: Could not determine release tag.")
             return fail_code
     except Exception as e:
         print(f"ERROR: Failed to fetch latest release info: {e}")
-        return fail_code
+        tag = ""
+        release = {}
 
     state = read_state(dest)
     current_tag = state.get("tag")
-    if not force and current_tag == tag and fail_code == 1:
-        print("Latest asset already downloaded.")
-        return 0
 
     if os.name == "nt":
         asset_filter = "game-win.zip"
     else:
         asset_filter = "game-linux.zip"
-    asset = _find_asset(release, asset_filter)
-    if not asset:
-        print(f"ERROR: No asset matching '{asset_filter}' found in release {tag}.")
-        return fail_code
 
-    asset_name, download_url = asset
+    if tag:
+        if not force and current_tag == tag and fail_code == 1:
+            print("Latest asset already downloaded.")
+            return 0
+        asset = _find_asset(release, asset_filter)
+        if not asset:
+            print(f"ERROR: No asset matching '{asset_filter}' found in release {tag}.")
+            return fail_code
+        asset_name, download_url = asset
+    else:
+        asset_name = asset_filter
+        download_url = (
+            f"https://github.com/mastercomfig/tc2/releases/latest/download/{asset_name}"
+        )
 
     print(f"Latest release tag: {tag}")
     print(f"Current release tag: {current_tag}")
@@ -279,8 +301,9 @@ def update_archive(
 
     print("Extraction complete.")
 
-    state["tag"] = tag
-    write_state(dest, state)
+    if tag:
+        state["tag"] = tag
+        write_state(dest, state)
 
     return 0
 
@@ -471,6 +494,29 @@ def set_launch_options(
         settings["opts"] = extra_options
     else:
         settings.pop("opts", None)
+    write_settings(dest, settings)
+
+
+def get_prerelease(dest: Path | None = None) -> str:
+    if not dest:
+        dest = default_dest_dir()
+
+    settings = read_settings(dest)
+    prerelease = settings.get("branch")
+    if prerelease and isinstance(prerelease, str):
+        return prerelease
+    return ""
+
+
+def set_prerelease(dest: Path | None = None, prerelease: str = "") -> None:
+    if not dest:
+        dest = default_dest_dir()
+
+    settings = read_settings(dest)
+    if prerelease:
+        settings["branch"] = prerelease
+    else:
+        settings.pop("branch", None)
     write_settings(dest, settings)
 
 
