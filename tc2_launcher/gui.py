@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from time import sleep
 from typing import Optional
 
 import webview
@@ -104,8 +105,9 @@ def check_launch_game(time_limit: float = 0):
 
 def check_queue():
     while True:
-        if not current_queue:
-            return
+        if current_queue is None:
+            sleep(1)
+            continue
         cmd = current_queue.get()
         if cmd == "close":
             close_gui()
@@ -113,7 +115,7 @@ def check_queue():
 
 
 def on_loaded(window):
-    if current_queue:
+    if current_queue is not None:
         threading.Thread(target=check_queue).start()
     if current_entry != "index":
         return
