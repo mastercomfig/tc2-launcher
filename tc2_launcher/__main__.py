@@ -93,12 +93,16 @@ def main():
         if launch_gui:
             start_updater_gui()
 
+        should_exit = False
+
         if not DEV_INSTANCE and update_self(version):
-            sys.exit(0)
-            return
+            should_exit = True
 
         should_launch_updater = False
         close_updater_gui()
+
+        if should_exit:
+            return
 
         clean_self_update()
 
