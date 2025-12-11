@@ -315,30 +315,12 @@ def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
 
     try:
         if os.name == "nt":
-            start_cmd = [
-                "cmd",
-                "/C",
-                "start",
-                '""',
-                "/d",
-                str(cwd) if cwd else ".",
-                "/b",
-            ]
-            cmd = start_cmd + cmd if isinstance(cmd, list) else start_cmd + [cmd]
-            subprocess.Popen(
-                cmd,
-                cwd=str(cwd) if cwd else None,
-                shell=True,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
-                | subprocess.CREATE_DEFAULT_ERROR_MODE,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            args = " ".join(cmd[1:])
+            os.startfile(cmd[0], "open", args, cwd=cwd, show_cmd=0)
         elif os.name == "posix":
             subprocess.Popen(
                 cmd,
-                cwd=str(cwd) if cwd else None,
+                cwd=cwd,
                 shell=True,
                 start_new_session=True,
                 stdin=subprocess.PIPE,
@@ -362,13 +344,15 @@ def get_game_dir(dest: Path | None = None) -> Path:
         if dest and dest.exists() and dest.is_dir():
             return dest
 
-    if not dest:
+    default_dest = default_dest_dir()
+    default_game_dest = default_dest / "game"
+    if not dest or dest == default_dest and not default_game_dest.exists():
         if os.name == "nt":
             drive = Path.home().drive
             dest = Path(f"{drive}/") / "tc2"
             return dest
         else:
-            dest = default_dest_dir()
+            return default_game_dest
 
     return dest / "game"
 

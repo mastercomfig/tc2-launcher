@@ -9,7 +9,7 @@ from time import sleep
 from timeit import default_timer as timer
 from typing import Optional
 
-from tc2_launcher.gui import close_gui, start_gui, start_gui_separate
+from tc2_launcher.gui import start_gui, start_gui_separate
 from tc2_launcher.run import (
     DEV_INSTANCE,
     clean_self_update,
