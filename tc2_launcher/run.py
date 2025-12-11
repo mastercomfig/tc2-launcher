@@ -315,6 +315,16 @@ def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
 
     try:
         if os.name == "nt":
+            start_cmd = [
+                "cmd",
+                "/C",
+                "start",
+                '""',
+                "/d",
+                str(cwd) if cwd else ".",
+                "/b",
+            ]
+            cmd = start_cmd + cmd if isinstance(cmd, list) else start_cmd + [cmd]
             subprocess.Popen(
                 cmd,
                 cwd=str(cwd) if cwd else None,
