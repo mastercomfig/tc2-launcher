@@ -346,8 +346,8 @@ def get_game_dir(dest: Path | None = None) -> Path:
 
     default_dest = default_dest_dir()
     default_game_dest = default_dest / "game"
-    if not dest or dest == default_dest and not default_game_dest.exists():
-        if os.name == "nt":
+    if not dest or dest == default_dest:
+        if os.name == "nt" and not default_game_dest.exists():
             drive = Path.home().drive
             dest = Path(f"{drive}/") / "tc2"
             return dest
