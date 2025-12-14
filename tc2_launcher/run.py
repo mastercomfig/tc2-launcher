@@ -95,6 +95,11 @@ def update_self(current_version: str) -> bool:
         asset_filter = ".exe"
     else:
         asset_filter = "-linux"
+        try:
+            import qtpy
+            asset_filter += "-qt"
+        except ImportError:
+            pass
     asset = _find_asset(release, asset_filter)
     if not asset:
         print(
