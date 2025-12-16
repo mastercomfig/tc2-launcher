@@ -37,7 +37,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     options,
-    name="TC2Launcher-linux",
+    name="TC2Launcher-linux-qt",
     debug=False,
     bootloader_ignore_signals=False,
     strip=True,
