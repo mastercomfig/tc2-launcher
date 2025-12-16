@@ -182,9 +182,17 @@ def _start_gui_private(
             webview.start(icon=str(entry_parent / "favicon.ico"), debug=DEV_INSTANCE)
         except Exception as e:
             if os.name == "posix" and sys.platform != "darwin":
-                subprocess.run(
-                    ["/usr/bin/notify-send", "--icon=error", f"TC2 Launcher Error: {e}"]
-                )
+                print(e)
+                try:
+                    subprocess.run(
+                        [
+                            "/usr/bin/notify-send",
+                            "--icon=error",
+                            f"TC2 Launcher Error: {e}",
+                        ]
+                    )
+                except Exception:
+                    pass
             raise e
     else:
         print("Failed to create webview window.")
