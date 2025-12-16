@@ -263,15 +263,15 @@ files = [
 
 [[package]]
 name = "clr-loader"
-version = "0.2.8"
+version = "0.2.9"
 description = "Generic pure Python loader for .NET runtimes"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
-    {file = "clr_loader-0.2.8-py3-none-any.whl", hash = "sha256:2cd76904e2f68fecab1ad1d158fb2905b5173a2b0cd54606d548518642bfbce9"},
-    {file = "clr_loader-0.2.8.tar.gz", hash = "sha256:b4cd3a2ee5f0489885ef07ffd87eb38b2cee24ca65dcacea97b34e7b59913814"},
+    {file = "clr_loader-0.2.9-py3-none-any.whl", hash = "sha256:7ef4f1280a5d3a4e19a8b21901b5fd804e104a1c40d755bcca0a4f694cb1b726"},
+    {file = "clr_loader-0.2.9.tar.gz", hash = "sha256:6af3d582c3de55ce9e9e676d2b3dbf6bc680c4ea8f76c58786739a5bdcf6b52d"},
 ]
 
 [package.dependencies]
@@ -440,15 +440,18 @@ pycairo = ">=1.16"
 
 [[package]]
 name = "pygobject-stubs"
-version = "2.14.0"
+version = "2.16.0"
 description = "Typing stubs for PyGObject"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "sys_platform == \"linux\""
 files = [
-    {file = "pygobject_stubs-2.14.0.tar.gz", hash = "sha256:614d4908a9ed6e9b821498059ab2e86736346c2fd75c0286ccb018cfcfd8ab23"},
+    {file = "pygobject_stubs-2.16.0.tar.gz", hash = "sha256:a97574616e92ef458605f9520d8d9db4c2a131affcd12fdd51db0b42395291e9"},
 ]
+
+[package.dependencies]
+typing_extensions = "*"
 
 [package.extras]
 dev = ["PyGObject", "codespell (>=2.4.1)", "isort (>=6.0.1)", "pre-commit", "ruff (>=0.12.7)"]
@@ -628,22 +631,22 @@ files = [
 
 [[package]]
 name = "urllib3"
-version = "2.5.0"
+version = "2.6.2"
 description = "HTTP library with thread-safe connection pooling, file post, and more."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
 files = [
-    {file = "urllib3-2.5.0-py3-none-any.whl", hash = "sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc"},
-    {file = "urllib3-2.5.0.tar.gz", hash = "sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760"},
+    {file = "urllib3-2.6.2-py3-none-any.whl", hash = "sha256:ec21cddfe7724fc7cb4ba4bea7aa8e2ef36f607a4bab81aa6ce42a13dc3f03dd"},
+    {file = "urllib3-2.6.2.tar.gz", hash = "sha256:016f9c98bb7e98085cb2b4b17b87d2c702975664e4f060c6532e64d1c1a5e797"},
 ]
 
 [package.extras]
-brotli = ["brotli (>=1.0.9) ; platform_python_implementation == \"CPython\"", "brotlicffi (>=0.8.0) ; platform_python_implementation != \"CPython\""]
+brotli = ["brotli (>=1.2.0) ; platform_python_implementation == \"CPython\"", "brotlicffi (>=1.2.0.0) ; platform_python_implementation != \"CPython\""]
 h2 = ["h2 (>=4,<5)"]
 socks = ["pysocks (>=1.5.6,!=1.5.7,<2.0)"]
-zstd = ["zstandard (>=0.18.0)"]
+zstd = ["backports-zstd (>=1.0.0) ; python_version < \"3.14\""]
 
 [[package]]
 name = "wheel"
