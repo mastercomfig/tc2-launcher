@@ -320,15 +320,25 @@ def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
 
     try:
         if os.name == "nt":
-            args = " ".join(cmd[1:])
-            os.startfile(cmd[0], "open", args, cwd=cwd, show_cmd=0)
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            creationflags = subprocess.CREATE_NO_WINDOW
+            subprocess.Popen(
+                cmd,
+                cwd=cwd,
+                startupinfo=startupinfo,
+                creationflags=creationflags,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         elif os.name == "posix":
             subprocess.Popen(
                 cmd,
                 cwd=cwd,
                 shell=True,
                 start_new_session=True,
-                stdin=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
