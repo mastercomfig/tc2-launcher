@@ -97,6 +97,7 @@ def update_self(current_version: str) -> bool:
         asset_filter = "-linux"
         try:
             import qtpy
+
             asset_filter += "-qt"
         except ImportError:
             pass
@@ -419,6 +420,7 @@ def launch_game(
     if sys.platform.startswith("win"):
         default_cmds = ["+ip", "127.0.0.1"]
     else:
+        default_args += ["-gathermod"]
         default_cmds = []
     if not extra_options:
         extra_options = settings.get("opts")
