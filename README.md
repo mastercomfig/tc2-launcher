@@ -20,3 +20,11 @@ sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
 ```
 
 For other distributions, consult the [PyGObject documentation](https://pygobject.gnome.org/getting_started.html).
+
+#### Qt
+
+There is also a `TC2Launcher-linux-qt` available for KDE/Qt users. You may need to install these Qt extensions:
+
+```sh
+sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine python3-pyqt5.qtwebchannel libqt5webkit5-dev
+```

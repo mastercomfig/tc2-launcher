@@ -365,7 +365,7 @@ def get_game_dir(dest: Path | None = None) -> Path:
     if not dest or dest == default_dest:
         if os.name == "nt" and not default_game_dest.exists():
             drive = Path.home().drive
-            dest = Path(f"{drive}/") / "tc2"
+            dest = Path(f"{drive}") / "tc2"
             return dest
         else:
             return default_game_dest
@@ -547,6 +547,9 @@ def open_install_folder(dest: Path | None = None) -> None:
 
 def change_install_folder(new_game_dir: Path):
     try:
+        # if the directory is a mount point or not empty, create a subdirectory
+        if new_game_dir.is_mount() or any(new_game_dir.iterdir()):
+            new_game_dir = new_game_dir / "tc2"
         new_game_dir = new_game_dir.resolve()
         new_game_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
@@ -554,6 +557,8 @@ def change_install_folder(new_game_dir: Path):
         return
 
     old_game_dir = get_game_dir()
+    if new_game_dir == old_game_dir:
+        return
     if old_game_dir.exists():
         try:
             copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
