@@ -146,6 +146,10 @@ def start_gui(entry_name: str = "index", **kwargs):
     _start_gui_private(entry_name, **kwargs)
 
 
+def start_fallback_gui(entry: str, extra_options: str, branch: str):
+    pass
+
+
 def _start_gui_private(
     entry_name: str = "index", queue: Optional[multiprocessing.Queue] = None, **kwargs
 ):

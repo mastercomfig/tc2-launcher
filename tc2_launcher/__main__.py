@@ -20,7 +20,7 @@ from tc2_launcher.run import (
     update_self,
 )
 
-version = "0.14.0"
+version = "0.15.0"
 
 updater_thread_queue: Optional[queue.Queue] = None
 should_launch_updater = True
@@ -28,11 +28,15 @@ use_updater_gui = False
 
 
 def updater_thread():
+    if not use_updater_gui:
+        return
     global updater_thread_queue
     sleep(0.5)
     if not should_launch_updater:
         return
     p, q = start_gui_separate("update", frameless=True, easy_drag=True)
+    if p is None:
+        return
     if updater_thread_queue:
         q.put(updater_thread_queue.get())
     updater_thread_queue = None
@@ -47,6 +51,8 @@ def start_updater_gui():
 
 
 def close_updater_gui():
+    if not use_updater_gui:
+        return
     global updater_thread_queue
     if updater_thread_queue:
         updater_thread_queue.put("close")

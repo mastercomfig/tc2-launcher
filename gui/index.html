@@ -273,11 +273,67 @@
             setLaunchState(0);
         }
 
+        async function queryWebApi(func, args) {
+            return null;
+        }
+
+        class API {
+            launch_game() {
+                if (window.pywebview) {
+                    window.pywebview.api.launch_game();
+                } else {
+                    queryWebApi("launch_game");
+                }
+            }
+
+            set_launch_options(opts) {
+                if (window.pywebview) {
+                    window.pywebview.api.set_launch_options(opts);
+                } else {
+                    queryWebApi("set_launch_options", opts);
+                }
+            }
+
+            open_install_folder() {
+                if (window.pywebview) {
+                    window.pywebview.api.open_install_folder();
+                } else {
+                    queryWebApi("open_install_folder");
+                }
+            }
+
+            move_install_folder() {
+                if (window.pywebview) {
+                    window.pywebview.api.move_install_folder();
+                } else {
+                    queryWebApi("move_install_folder");
+                }
+            }
+
+            check_for_updates() {
+                if (window.pywebview) {
+                    window.pywebview.api.check_for_updates();
+                } else {
+                    queryWebApi("check_for_updates");
+                }
+            }
+
+            set_prerelease(branch) {
+                if (window.pywebview) {
+                    window.pywebview.api.set_prerelease(branch);
+                } else {
+                    queryWebApi("set_prerelease", branch);
+                }
+            }
+        }
+
+        const api = new API();
+
         document.getElementById("launch-btn").addEventListener("click", () => {
             if (document.getElementById("launch-btn").disabled) {
                 return;
             }
-            window.pywebview.api.launch_game();
+            api.launch_game();
             setLaunchState(1);
         });
         document.getElementById("settings-btn").addEventListener("click", () => {
@@ -292,34 +348,41 @@
             }
         });
         document.getElementById("launch-options").addEventListener("input", (event) => {
-            window.pywebview.api.set_launch_options(event.target.value);
+            api.set_launch_options(event.target.value);
         });
         document.getElementById("open-folder-btn").addEventListener("click", () => {
             if (document.getElementById("open-folder-btn").disabled) {
                 return;
             }
-            window.pywebview.api.open_install_folder();
+            api.open_install_folder();
         });
         document.getElementById("move-folder-btn").addEventListener("click", () => {
             if (document.getElementById("move-folder-btn").disabled) {
                 return;
             }
-            window.pywebview.api.move_install_folder();
+            api.move_install_folder();
         });
         document.getElementById("update-btn").addEventListener("click", () => {
             if (document.getElementById("update-btn").disabled) {
                 return;
             }
             setLaunchState(-1);
-            window.pywebview.api.check_for_updates();
+            api.check_for_updates();
         });
         document.getElementById("prerelease").addEventListener("change", (event) => {
             if (event.target.checked) {
-                window.pywebview.api.set_prerelease("prerelease");
+                api.set_prerelease("prerelease");
             } else {
-                window.pywebview.api.set_prerelease("");
+                api.set_prerelease("");
             }
             document.getElementById("update-btn").click();
+        });
+
+        queryWebApi("state").then(state => {
+            if (state) {
+                document.getElementById("launch-options").value = state.opts;
+                document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
+            }
         });
 
         window.addEventListener("pywebviewready", () => {

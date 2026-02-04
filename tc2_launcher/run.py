@@ -112,7 +112,7 @@ def update_self(current_version: str) -> bool:
 
     dest_dir = default_dest_dir()
     download_path = dest_dir / "update" / tag / asset_name
-    print(f"Downloading self-update...")
+    print("Downloading self-update...")
     try:
         _download(download_url, download_path)
     except Exception as e:
@@ -302,7 +302,7 @@ def update_archive(
 
     exe_path = _get_game_exe(dest)
     if not exe_path:
-        print(f"ERROR: Could not locate game executable after update.")
+        print("ERROR: Could not locate game executable after update.")
         return -2
 
     print("Extraction complete.")
@@ -365,7 +365,7 @@ def get_game_dir(dest: Path | None = None) -> Path:
     if not dest or dest == default_dest:
         if os.name == "nt" and not default_game_dest.exists():
             drive = Path.home().drive
-            dest = Path(f"{drive}") / "tc2"
+            dest = Path(f"{drive}\\") / "tc2"
             return dest
         else:
             return default_game_dest
@@ -375,7 +375,7 @@ def get_game_dir(dest: Path | None = None) -> Path:
 
 def _get_game_exe_name(running_process: bool = False) -> str:
     # Determine executable name based on platform
-    if sys.platform.startswith("win"):
+    if os.name == "nt":
         return "tc2_win64.exe"
     else:
         return "tc2_linux64" if running_process else "tc2.sh"
@@ -417,7 +417,7 @@ def launch_game(
         "-nobreakpad",
         "-nominidumps",
     ]
-    if sys.platform.startswith("win"):
+    if os.name == "nt":
         default_cmds = ["+ip", "127.0.0.1"]
     else:
         default_args += ["-gathermod"]
@@ -426,7 +426,7 @@ def launch_game(
         extra_options = settings.get("opts")
     if not extra_options or not isinstance(extra_options, list):
         extra_options = []
-    if sys.platform.startswith("win"):
+    if os.name == "nt":
         noborder_check_opts = ["-sw", "-windowed", "-noborder", "-full", "-fullscreen"]
         extra_options_set = set(extra_options)
         use_noborder = True
@@ -537,7 +537,7 @@ def open_install_folder(dest: Path | None = None) -> None:
 
     game_dir = get_game_dir(dest)
     if game_dir.exists() and game_dir.is_dir():
-        if sys.platform.startswith("win"):
+        if os.name == "nt":
             os.startfile(game_dir)
         elif sys.platform == "darwin":
             subprocess.Popen(["open", game_dir])
