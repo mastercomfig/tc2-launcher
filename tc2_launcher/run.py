@@ -14,10 +14,10 @@ from timeit import default_timer as timer
 import psutil
 import requests
 
+from tc2_launcher import logger
+
 TC2_REPO = "mastercomfig/tc2"
 LAUNCHER_REPO = "mastercomfig/tc2-launcher"
-
-DEV_INSTANCE = not getattr(sys, "frozen", False)
 
 
 def default_dest_dir() -> Path:
@@ -83,13 +83,13 @@ def update_self(current_version: str) -> bool:
         release = _get_latest_release(None, LAUNCHER_REPO)
         tag = release.get("tag_name", "").lstrip("v")
     except Exception as e:
-        print(f"ERROR: Failed to get self-update info: {e}")
+        logger.error(f"Failed to get self-update info: {e}")
         return False
 
     if tag == current_version:
         return False
 
-    print(f"Self-update available: {current_version} -> {tag}")
+    logger.info(f"Self-update available: {current_version} -> {tag}")
 
     if os.name == "nt":
         asset_filter = ".exe"
@@ -103,8 +103,8 @@ def update_self(current_version: str) -> bool:
             pass
     asset = _find_asset(release, asset_filter)
     if not asset:
-        print(
-            f"ERROR: No asset matching '{asset_filter}' found in self-update release {tag}."
+        logger.error(
+            f"No asset matching '{asset_filter}' found in self-update release {tag}."
         )
         return False
 
@@ -112,16 +112,16 @@ def update_self(current_version: str) -> bool:
 
     dest_dir = default_dest_dir()
     download_path = dest_dir / "update" / tag / asset_name
-    print("Downloading self-update...")
+    logger.info("Downloading self-update...")
     try:
         _download(download_url, download_path)
     except Exception as e:
-        print(f"ERROR: Failed to download self-update: {e}")
+        logger.error(f"Failed to download self-update: {e}")
         return False
-    print("Self-update download complete.")
+    logger.info("Self-update download complete.")
 
     current_path = Path(sys.argv[0]).resolve()
-    print("Launching self-update...")
+    logger.info("Launching self-update...")
     try:
         filtered_args = [arg for arg in sys.argv[1:] if arg != "--replace"]
         if os.name == "posix":
@@ -131,7 +131,7 @@ def update_self(current_version: str) -> bool:
         )
         return True
     except Exception as e:
-        print(f"Failed to launch self-update: {e}")
+        logger.error(f"Failed to launch self-update: {e}")
         return False
 
 
@@ -243,10 +243,10 @@ def update_archive(
         release = _get_latest_release(dest, TC2_REPO)
         tag = release.get("tag_name")
         if not tag:
-            print("ERROR: Could not determine release tag.")
+            logger.error("Could not determine release tag.")
             return fail_code
     except Exception as e:
-        print(f"ERROR: Failed to fetch latest release info: {e}")
+        logger.error(f"Failed to fetch latest release info: {e}")
         tag = ""
         release = {}
 
@@ -260,11 +260,11 @@ def update_archive(
 
     if tag:
         if not force and current_tag == tag and fail_code == 1:
-            print("Latest asset already downloaded.")
+            logger.info("Latest asset already downloaded.")
             return 0
         asset = _find_asset(release, asset_filter)
         if not asset:
-            print(f"ERROR: No asset matching '{asset_filter}' found in release {tag}.")
+            logger.error(f"No asset matching '{asset_filter}' found in release {tag}.")
             return fail_code
         asset_name, download_url = asset
     else:
@@ -273,9 +273,9 @@ def update_archive(
             f"https://github.com/mastercomfig/tc2/releases/latest/download/{asset_name}"
         )
 
-    print(f"Latest release tag: {tag}")
-    print(f"Current release tag: {current_tag}")
-    print(f"Selected asset: {asset_name}")
+    logger.info(f"Latest release tag: {tag}")
+    logger.info(f"Current release tag: {current_tag}")
+    logger.info(f"Selected asset: {asset_name}")
 
     # asset_path = dest / asset_name
     with tempfile.TemporaryDirectory(
@@ -284,28 +284,28 @@ def update_archive(
         asset_path = Path(tmp_dir_name) / asset_name
         game_dir = get_game_dir(dest)
 
-        print(f"Downloading latest asset to {asset_path}...")
+        logger.info(f"Downloading latest asset to {asset_path}...")
         try:
             _download(download_url, asset_path)
         except Exception as e:
-            print(f"ERROR: Failed to download asset: {e}")
+            logger.error(f"Failed to download asset: {e}")
             return fail_code
-        print("Download complete.")
+        logger.info("Download complete.")
 
-        print(f"Extracting asset to {game_dir}...")
+        logger.info(f"Extracting asset to {game_dir}...")
         if asset_name.lower().endswith(".zip") and asset_path.exists():
             _extract_zip(asset_path, game_dir)
 
     if not game_dir.exists():
-        print(f"ERROR: Game directory '{game_dir}' does not exist after extraction.")
+        logger.error(f"Game directory '{game_dir}' does not exist after extraction.")
         return fail_code
 
     exe_path = _get_game_exe(dest)
     if not exe_path:
-        print("ERROR: Could not locate game executable after update.")
+        logger.error("Could not locate game executable after update.")
         return -2
 
-    print("Extraction complete.")
+    logger.info("Extraction complete.")
 
     if tag:
         state["tag"] = tag
@@ -344,7 +344,7 @@ def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
                 stderr=subprocess.DEVNULL,
             )
     except Exception as e:
-        print(f"Failed to run command {' '.join(cmd)}: {e}")
+        logger.error(f"Failed to run command {' '.join(cmd)}: {e}")
 
 
 def get_game_dir(dest: Path | None = None) -> Path:
@@ -356,7 +356,7 @@ def get_game_dir(dest: Path | None = None) -> Path:
             dest = Path(user_game_dir).resolve()
             dest.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print(f"ERROR: Failed to use specified game directory '{dest}': {e}")
+            logger.error(f"Failed to use specified game directory '{dest}': {e}")
         if dest and dest.exists() and dest.is_dir():
             return dest
 
@@ -404,7 +404,7 @@ def launch_game(
 
     exe_path = _get_game_exe(dest)
     if not exe_path:
-        print(f"Could not locate game executable '{exe_path}'")
+        logger.error(f"Could not locate game executable '{exe_path}'")
         return
 
     # Resolve options with persistence
@@ -438,23 +438,33 @@ def launch_game(
     cmd = [str(exe_path)] + default_args + extra_options + default_cmds
 
     # Launch the game
-    print(f"Launching: {' '.join(cmd)}")
+    logger.info(f"Launching: {' '.join(cmd)}")
     try:
         run_non_blocking(cmd, cwd=exe_path.parent)
     except Exception as e:
-        print(f"Failed to launch game: {e}")
+        logger.error(f"Failed to launch game: {e}")
 
 
 def _wait_game_exit_inner(pid, callback):
     try:
         p = psutil.Process(pid)
-        p.wait()
+        while not sys.is_finalizing():
+            try:
+                p.wait(timeout=1)
+            except psutil.TimeoutExpired:
+                pass
         callback()
     except Exception:
         pass
 
 
+wait_game_exit_thread = None
+
+
 def wait_game_exit(pid, callback):
+    global wait_game_exit_thread
+    if wait_game_exit_thread is not None:
+        return
     wait_game_exit_thread = threading.Thread(
         target=_wait_game_exit_inner, args=(pid, callback)
     )
@@ -466,15 +476,22 @@ DEFAULT_TIME_LIMIT = 5
 
 def wait_game_running(time_limit: float = DEFAULT_TIME_LIMIT) -> int | None:
     game_exe_name = _get_game_exe_name(running_process=True)
+    game_dir = get_game_dir()
+
     interval = 0.2
     if time_limit == 0:
         time_limit = DEFAULT_TIME_LIMIT
     elif time_limit < 0:
         time_limit = interval
+
     while time_limit > 0:
-        for p in psutil.process_iter(["pid", "name"]):
-            if p.info["name"] == game_exe_name:
-                return p.pid
+        for p in psutil.process_iter(["pid", "name", "exe"]):
+            if p.info["name"] != game_exe_name:
+                continue
+            exe = Path(p.info["exe"])
+            if not exe.is_relative_to(game_dir):
+                continue
+            return p.pid
         if time_limit <= interval:
             break
         before = timer()
@@ -553,7 +570,7 @@ def change_install_folder(new_game_dir: Path):
         new_game_dir = new_game_dir.resolve()
         new_game_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        print(f"ERROR: Invalid path '{new_game_dir}': {e}")
+        logger.error(f"Invalid path '{new_game_dir}': {e}")
         return
 
     old_game_dir = get_game_dir()
@@ -564,7 +581,7 @@ def change_install_folder(new_game_dir: Path):
             copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
             rmtree(old_game_dir)
         except Exception as e:
-            print(f"ERROR: Failed to move game directory: {e}")
+            logger.error(f"Failed to move game directory: {e}")
             return
 
     settings = read_settings()
@@ -589,6 +606,6 @@ def uninstall_launcher(dest: Path | None = None) -> bool:
         rmtree(dest)
         return True
     except Exception as e:
-        print(f"Failed to uninstall launcher: {e}")
+        logger.error(f"Failed to uninstall launcher: {e}")
 
     return False

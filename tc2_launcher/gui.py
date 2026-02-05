@@ -1,16 +1,20 @@
+import asyncio
 import multiprocessing
-import os
 import subprocess
 import sys
 import threading
+import traceback
+import webbrowser
+from _thread import interrupt_main
 from pathlib import Path
 from time import sleep
+from timeit import default_timer as timer
 from typing import Optional
 
 import webview
 
+from tc2_launcher import logger
 from tc2_launcher.run import (
-    DEV_INSTANCE,
     change_install_folder,
     get_launch_options,
     get_prerelease,
@@ -22,10 +26,22 @@ from tc2_launcher.run import (
     wait_game_exit,
     wait_game_running,
 )
+from tc2_launcher.utils import DEV_INSTANCE
 
 
 def get_window(idx: int = 0):
     return webview.windows[idx]
+
+
+eval_queue: list[str] = []
+
+
+def send_eval(script: str):
+    global using_fallback
+    if using_fallback:
+        eval_queue.append(script)
+    else:
+        get_window().evaluate_js(script)
 
 
 def get_entrypoint():
@@ -60,12 +76,12 @@ class Api:
         if isinstance(prerelease, str):
             set_prerelease(prerelease=prerelease)
 
-    def open_install_folder(self):
-        open_install_folder()
-
     def check_for_updates(self):
         res = update_archive()
-        get_window().evaluate_js(f"archiveReady({res});")
+        send_eval(f"archiveReady({res});")
+
+    def open_install_folder(self):
+        open_install_folder()
 
     def move_install_folder(self):
         try:
@@ -76,26 +92,25 @@ class Api:
             new_game_dir = Path(path).resolve()
             change_install_folder(new_game_dir)
         except Exception as e:
-            print(f"ERROR: Invalid path: {e}")
+            logger.error(f"Invalid path: {e}")
             return
 
 
-def update_and_notify(window):
+def update_and_notify():
     res = update_archive()
-    window.evaluate_js(f"archiveReady({res});")
+    send_eval(f"archiveReady({res});")
 
 
 def on_game_exit():
-    window = get_window()
-    window.evaluate_js("setLaunchState(0);")
-    update_and_notify(window)
+    send_eval("setLaunchState(0);")
+    update_and_notify()
 
 
 def check_launch_game(time_limit: float = 0):
     pid = wait_game_running(time_limit)
     has_pid = pid is not None
     res = 2 if has_pid else 0
-    get_window().evaluate_js(f"setLaunchState({res});")
+    send_eval(f"setLaunchState({res});")
     if has_pid:
         wait_game_exit(pid, on_game_exit)
         return True
@@ -105,6 +120,8 @@ def check_launch_game(time_limit: float = 0):
 
 def check_queue():
     while True:
+        if sys.is_finalizing():
+            return
         if current_queue is None:
             sleep(1)
             continue
@@ -114,13 +131,18 @@ def check_queue():
             return
 
 
+queue_thread = None
+
+
 def on_loaded(window):
-    if current_queue is not None:
-        threading.Thread(target=check_queue).start()
+    global queue_thread
+    if current_queue is not None and queue_thread is None:
+        queue_thread = threading.Thread(target=check_queue)
+        queue_thread.start()
     if current_entry != "index":
         return
     if not check_launch_game(-1):
-        update_and_notify(window)
+        update_and_notify()
 
 
 entry_parent = get_entrypoint()
@@ -146,8 +168,159 @@ def start_gui(entry_name: str = "index", **kwargs):
     _start_gui_private(entry_name, **kwargs)
 
 
-def start_fallback_gui(entry: str, extra_options: str, branch: str):
-    pass
+last_eval_time = timer()
+
+fallback_keep_alive_thread = None
+
+
+def fallback_keep_alive():
+    global last_eval_time
+    last_eval_time = timer()
+    while True:
+        sleep(2)
+        if sys.is_finalizing():
+            return
+        print(timer() - last_eval_time)
+        if timer() - last_eval_time >= 2:
+            interrupt_main()
+            return
+
+
+def start_fallback_keep_alive():
+    global fallback_keep_alive_thread
+    if fallback_keep_alive_thread is not None:
+        return
+    fallback_keep_alive_thread = threading.Thread(target=fallback_keep_alive)
+    fallback_keep_alive_thread.start()
+
+
+using_fallback = False
+
+
+async def start_fallback_gui(entry: str, extra_options: str, branch: str):
+    global last_eval_time
+    # start a local http server and return the address
+    try:
+        import aiohttp.web
+
+        api = Api()
+
+        app = aiohttp.web.Application()
+
+        app.add_routes([aiohttp.web.static("/", entry_parent)])
+
+        async def index(r: aiohttp.web.Request):
+            return aiohttp.web.FileResponse(entry)
+
+        app.add_routes([aiohttp.web.get("/entry", index)])
+
+        async def state_handler(r: aiohttp.web.Request):
+            on_loaded(None)
+            return aiohttp.web.json_response(
+                {
+                    "opts": extra_options,
+                    "branch": branch,
+                }
+            )
+
+        app.add_routes([aiohttp.web.post("/api/state", state_handler)])
+
+        async def eval_handler(r: aiohttp.web.Request):
+            global last_eval_time
+            last_eval_time = timer()
+            to_send = []
+            while eval_queue:
+                to_send.append(eval_queue.pop())
+            return aiohttp.web.json_response(to_send)
+
+        app.add_routes([aiohttp.web.post("/api/eval", eval_handler)])
+
+        class ApiCallbackHandler:
+            def __init__(self, func, param=False):
+                self.func = func
+                self.param = param
+
+            async def __call__(self, r: aiohttp.web.Request):
+                if self.param:
+                    self.func(await r.text())
+                else:
+                    self.func()
+                return aiohttp.web.Response()
+
+        class ApiCallbackWithParamHandler(ApiCallbackHandler):
+            def __init__(self, func):
+                super().__init__(func, param=True)
+
+        app.add_routes(
+            [
+                aiohttp.web.post(
+                    "/api/launch_game",
+                    ApiCallbackHandler(api.launch_game),
+                )
+            ]
+        )
+        app.add_routes(
+            [
+                aiohttp.web.post(
+                    "/api/launch_options",
+                    ApiCallbackWithParamHandler(api.set_launch_options),
+                )
+            ]
+        )
+        app.add_routes(
+            [
+                aiohttp.web.post(
+                    "/api/set_prerelease",
+                    ApiCallbackWithParamHandler(api.set_prerelease),
+                )
+            ]
+        )
+        app.add_routes(
+            [
+                aiohttp.web.post(
+                    "/api/check_for_updates",
+                    ApiCallbackHandler(api.check_for_updates),
+                )
+            ]
+        )
+        app.add_routes(
+            [
+                aiohttp.web.post(
+                    "/api/open_install_folder",
+                    ApiCallbackHandler(api.open_install_folder),
+                )
+            ]
+        )
+        app.add_routes(
+            [
+                aiohttp.web.post(
+                    "/api/move_install_folder",
+                    ApiCallbackHandler(api.move_install_folder),
+                )
+            ]
+        )
+
+        runner = aiohttp.web.AppRunner(app)
+        await runner.setup()
+        site = aiohttp.web.TCPSite(runner, "localhost", 48564)
+        await site.start()
+        address = "http://localhost:48564/entry"
+        webbrowser.open(address)
+        start_fallback_keep_alive()
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        finally:
+            await runner.cleanup()
+        print("exiting")
+    except Exception as e:
+        logger.error(f"Could not start fallback GUI: {e}")
+
+
+def fallback_gui_main(entry: str, extra_options: str, branch: str):
+    global using_fallback
+    using_fallback = True
+    asyncio.run(start_fallback_gui(entry, extra_options, branch))
 
 
 def _start_gui_private(
@@ -178,25 +351,28 @@ def _start_gui_private(
         background_color="#212121",
         **kwargs,
     )
+    if not window:
+        logger.error("Failed to create webview window.")
     if window:
         window.state.opts = extra_options_str
         window.state.branch = branch
         window.events.loaded += lambda: on_loaded(window)
         try:
+            raise Exception("Test")
             webview.start(icon=str(entry_parent / "favicon.ico"), debug=DEV_INSTANCE)
         except Exception as e:
-            if os.name == "posix" and sys.platform != "darwin":
-                print(e)
-                try:
-                    subprocess.run(
-                        [
-                            "/usr/bin/notify-send",
-                            "--icon=error",
-                            f"TC2 Launcher Error: {e}",
-                        ]
-                    )
-                except Exception:
-                    pass
-            raise e
-    else:
-        print("Failed to create webview window.")
+            logger.error("Failed to start webview window.")
+            logger.error(traceback.format_exc())
+            try:
+                subprocess.run(
+                    [
+                        "/usr/bin/notify-send",
+                        "--icon=error",
+                        f"TC2 Launcher Error: {e}",
+                    ]
+                )
+            except Exception:
+                pass
+            window = None
+    if not window:
+        fallback_gui_main(entry, extra_options_str, branch)

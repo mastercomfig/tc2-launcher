@@ -274,7 +274,10 @@
         }
 
         async function queryWebApi(func, args) {
-            return null;
+            return await fetch(`/api/${func}`, {
+                method: "POST",
+                body: args,
+            });
         }
 
         class API {
@@ -378,11 +381,33 @@
             document.getElementById("update-btn").click();
         });
 
-        queryWebApi("state").then(state => {
-            if (state) {
-                document.getElementById("launch-options").value = state.opts;
-                document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
+        let pumpTimeout = null;
+
+        queryWebApi("state").then(d => d.json()).then(async state => {
+            document.getElementById("launch-options").value = state.opts;
+            document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
+
+            async function evalPump() {
+                await queryWebApi("eval").then(d => d.json()).then(queue => {
+                    for (const script of queue) {
+                        eval(script);
+                    }
+                });
+                pumpTimeout = setTimeout(evalPump, 500);
             }
+
+            evalPump();
+        });
+
+        function clearEvalPump() {
+            if (pumpTimeout) {
+                clearTimeout(pumpTimeout);
+                pumpTimeout = null;
+            }
+        }
+
+        window.addEventListener("beforeunload", () => {
+            clearEvalPump();
         });
 
         window.addEventListener("pywebviewready", () => {

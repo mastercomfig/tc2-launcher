@@ -9,9 +9,9 @@ from time import sleep
 from timeit import default_timer as timer
 from typing import Optional
 
+from tc2_launcher import logger
 from tc2_launcher.gui import start_gui, start_gui_separate
 from tc2_launcher.run import (
-    DEV_INSTANCE,
     clean_self_update,
     default_dest_dir,
     launch_game,
@@ -19,8 +19,9 @@ from tc2_launcher.run import (
     update_archive,
     update_self,
 )
+from tc2_launcher.utils import DEV_INSTANCE
 
-version = "0.15.0"
+version = "0.16.0"
 
 updater_thread_queue: Optional[queue.Queue] = None
 should_launch_updater = True
@@ -64,9 +65,6 @@ def main():
     if len(sys.argv) >= 3 and sys.argv[1] == "--replace":
         launch_gui = len(sys.argv) == 3
 
-        if launch_gui:
-            start_updater_gui()
-
         # Replacement mode after self-update
         try:
             original_path = Path(sys.argv[2]).resolve()
@@ -92,11 +90,9 @@ def main():
                     raise last_exc or Exception("Unknown error deleting original file")
                 # replace the original file with the current file
                 copyfile(current_path, original_path)
-                print("Self-update applied successfully.")
+                logger.info("Self-update applied successfully.")
         except Exception as e:
-            print(f"ERROR: Failed to apply self-update: {e}")
-
-        close_updater_gui()
+            logger.error(f"Failed to apply self-update: {e}")
     else:
         launch_gui = len(sys.argv) == 1
         if launch_gui:
@@ -148,6 +144,7 @@ def main():
     )
 
     if launch_gui:
+        logger.setup_logger(default_dest_dir())
         start_gui()
         return
 
@@ -159,19 +156,21 @@ def main():
         try:
             dest = Path(dest_dir).resolve()
         except Exception as e:
-            print(f"ERROR: Invalid destination path '{dest_dir}': {e}")
+            logger.error(f"Invalid destination path '{dest_dir}': {e}")
             return
         if not dest.exists():
             try:
                 dest.mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                print(f"ERROR: Failed to create destination directory '{dest}': {e}")
+                logger.error(f"Failed to create destination directory '{dest}': {e}")
                 return
         elif not dest.is_dir():
-            print(f"ERROR: Destination '{dest}' exists and is not a directory.")
+            logger.error(f"Destination '{dest}' exists and is not a directory.")
             return
     else:
         dest = default_dest_dir()
+
+    logger.setup_logger(dest)
 
     update_archive(
         dest=dest,
