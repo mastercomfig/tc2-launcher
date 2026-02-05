@@ -61,7 +61,7 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get -yq --no-install-recommends install libcairo2-dev libxt-dev libgirepository1.0-dev
           poetry install --no-interaction --no-root
-          poetry remove --no-interaction 'pywebview[gtk]'
+          poetry remove --no-interaction 'pywebview'
           poetry add --no-interaction 'pywebview[qt]' qtpy
       - name: Install project
         run: poetry install --no-interaction
