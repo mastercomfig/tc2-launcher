@@ -31,7 +31,7 @@ jobs:
         run: poetry install --no-interaction
       - name: Build project
         run: |
-          poetry run build.sh
+          poetry run ./build.sh
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
@@ -60,14 +60,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get -yq --no-install-recommends install libcairo2-dev libxt-dev
-          poetry install --no-interaction --no-root
           poetry remove --no-interaction 'pywebview[gtk]'
           poetry add --no-interaction 'pywebview[qt]' qtpy
+          poetry install --no-interaction --no-root
       - name: Install project
         run: poetry install --no-interaction
       - name: Build project
         run: |
-          poetry run build-qt.sh
+          poetry run ./build-qt.sh
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
@@ -99,7 +99,7 @@ jobs:
         run: C:\Users\runneradmin\.local\bin\poetry install --no-interaction
       - name: Build project
         run: |
-          C:\Users\runneradmin\.local\bin\poetry run build.bat
+          C:\Users\runneradmin\.local\bin\poetry run .\build.bat
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
