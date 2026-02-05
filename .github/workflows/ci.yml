@@ -63,6 +63,7 @@ jobs:
           poetry install --no-interaction --no-root
           poetry remove --no-interaction 'pywebview'
           poetry add --no-interaction 'pywebview[qt]' qtpy
+          poetry install --no-interaction --no-root
       - name: Install project
         run: poetry install --no-interaction
       - name: Build project
