@@ -310,6 +310,8 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         try:
             while True:
                 await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            pass
         finally:
             await runner.cleanup()
         print("exiting")
@@ -358,7 +360,6 @@ def _start_gui_private(
         window.state.branch = branch
         window.events.loaded += lambda: on_loaded(window)
         try:
-            raise Exception("Test")
             webview.start(icon=str(entry_parent / "favicon.ico"), debug=DEV_INSTANCE)
         except Exception as e:
             logger.error("Failed to start webview window.")
