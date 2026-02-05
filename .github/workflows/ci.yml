@@ -24,7 +24,8 @@ jobs:
       - name: Install dependencies
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get install libcairo2-dev libxt-dev libgirepository1.0-dev
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -yq --no-install-recommends install libcairo2-dev libxt-dev libgirepository1.0-dev
           poetry install --no-interaction --no-root
       - name: Install project
         run: poetry install --no-interaction
@@ -57,7 +58,8 @@ jobs:
       - name: Install dependencies
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get install libcairo2-dev libxt-dev
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -yq --no-install-recommends install libcairo2-dev libxt-dev
           poetry install --no-interaction --no-root
           poetry remove --no-interaction 'pywebview[gtk]'
           poetry add --no-interaction 'pywebview[qt]' qtpy
