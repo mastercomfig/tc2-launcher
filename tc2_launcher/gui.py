@@ -118,7 +118,11 @@ def check_launch_game(time_limit: float = 0):
         return False
 
 
+queue_thread = None
+
+
 def check_queue():
+    global queue_thread
     while True:
         if sys.is_finalizing():
             return
@@ -127,11 +131,9 @@ def check_queue():
             continue
         cmd = current_queue.get()
         if cmd == "close":
+            queue_thread = None
             close_gui()
             return
-
-
-queue_thread = None
 
 
 def on_loaded(window):

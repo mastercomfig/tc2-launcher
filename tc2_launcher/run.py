@@ -445,7 +445,11 @@ def launch_game(
         logger.error(f"Failed to launch game: {e}")
 
 
+wait_game_exit_thread = None
+
+
 def _wait_game_exit_inner(pid, callback):
+    global wait_game_exit_thread
     try:
         p = psutil.Process(pid)
         while not sys.is_finalizing():
@@ -453,12 +457,10 @@ def _wait_game_exit_inner(pid, callback):
                 p.wait(timeout=1)
             except psutil.TimeoutExpired:
                 pass
+        wait_game_exit_thread = None
         callback()
     except Exception:
-        pass
-
-
-wait_game_exit_thread = None
+        wait_game_exit_thread = None
 
 
 def wait_game_exit(pid, callback):
