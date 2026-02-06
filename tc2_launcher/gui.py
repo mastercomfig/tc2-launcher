@@ -177,11 +177,10 @@ def fallback_keep_alive():
     global last_eval_time
     last_eval_time = timer()
     while True:
-        sleep(2)
+        sleep(10)
         if sys.is_finalizing():
             return
-        print(timer() - last_eval_time)
-        if timer() - last_eval_time >= 2:
+        if timer() - last_eval_time >= 10:
             interrupt_main()
             return
 
