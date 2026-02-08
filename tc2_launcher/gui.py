@@ -1,5 +1,6 @@
 import asyncio
 import multiprocessing
+import os
 import subprocess
 import sys
 import threading
@@ -306,7 +307,10 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         site = aiohttp.web.TCPSite(runner, "localhost", 48564)
         await site.start()
         address = "http://localhost:48564/entry"
-        webbrowser.open(address)
+        if os.name == "nt":
+            webbrowser.open(address)
+        else:
+            subprocess.run(["xdg-open", address])
         start_fallback_keep_alive()
         try:
             while True:
@@ -315,7 +319,6 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
             pass
         finally:
             await runner.cleanup()
-        print("exiting")
     except Exception as e:
         logger.error(f"Could not start fallback GUI: {e}")
 
