@@ -455,10 +455,12 @@ def _wait_game_exit_inner(pid, callback):
         while not sys.is_finalizing():
             try:
                 p.wait(timeout=1)
+                break
             except psutil.TimeoutExpired:
                 pass
         wait_game_exit_thread = None
-        callback()
+        if not sys.is_finalizing():
+            callback()
     except Exception:
         wait_game_exit_thread = None
 
