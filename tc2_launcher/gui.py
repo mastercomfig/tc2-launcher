@@ -171,19 +171,23 @@ def start_gui(entry_name: str = "index", **kwargs):
     _start_gui_private(entry_name, **kwargs)
 
 
-last_eval_time = timer()
+last_eval_time = None
 
 fallback_keep_alive_thread = None
 
 
 def fallback_keep_alive():
     global last_eval_time
-    last_eval_time = timer()
+    watch_start_time = timer()
     while True:
-        sleep(10)
+        sleep(10 if last_eval_time is None else 2)
         if sys.is_finalizing():
             return
-        if timer() - last_eval_time >= 10:
+        keepalive_time = 10
+        if last_eval_time is not None:
+            watch_start_time = last_eval_time
+            keepalive_time = 2
+        if timer() - watch_start_time >= keepalive_time:
             interrupt_main()
             return
 

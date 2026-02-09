@@ -21,7 +21,7 @@ from tc2_launcher.run import (
 )
 from tc2_launcher.utils import DEV_INSTANCE
 
-version = "0.17.0"
+version = "0.18.0"
 
 updater_thread_queue: Optional[queue.Queue] = None
 should_launch_updater = True
