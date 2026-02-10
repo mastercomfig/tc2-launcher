@@ -314,6 +314,23 @@ def update_archive(
     return 0
 
 
+def get_safe_posix_env() -> dict:
+    new_env = os.environ.copy()
+    if "LD_LIBRARY_PATH_ORIG" in new_env:
+        new_env["LD_LIBRARY_PATH"] = new_env["LD_LIBRARY_PATH_ORIG"]
+    elif "LD_LIBRARY_PATH" in new_env:
+        del new_env["LD_LIBRARY_PATH"]
+    return new_env
+
+
+def run_blocking(cmd: list[str], cwd: Path | None = None) -> None:
+    if os.name == "nt":
+        subprocess.run(cmd, cwd=cwd)
+    else:
+        cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
+        subprocess.run(cmd, env=get_safe_posix_env(), cwd=cwd, shell=True)
+
+
 def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
     if os.name == "posix":
         cmd.insert(0, "nohup")
@@ -336,6 +353,7 @@ def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
         elif os.name == "posix":
             subprocess.Popen(
                 cmd,
+                env=get_safe_posix_env(),
                 cwd=cwd,
                 shell=True,
                 start_new_session=True,

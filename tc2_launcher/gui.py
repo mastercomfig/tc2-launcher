@@ -1,7 +1,6 @@
 import asyncio
 import multiprocessing
 import os
-import subprocess
 import sys
 import threading
 import traceback
@@ -21,6 +20,7 @@ from tc2_launcher.run import (
     get_prerelease,
     launch_game,
     open_install_folder,
+    run_blocking,
     set_launch_options,
     set_prerelease,
     update_archive,
@@ -188,7 +188,10 @@ def fallback_keep_alive():
             watch_start_time = last_eval_time
             keepalive_time = 2
         if timer() - watch_start_time >= keepalive_time:
-            interrupt_main()
+            if os.name == "nt":
+                interrupt_main()
+            else:
+                os.kill(os.getpid(), 2)
             return
 
 
@@ -314,7 +317,7 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         if os.name == "nt":
             webbrowser.open(address)
         else:
-            subprocess.run(["xdg-open", address])
+            run_blocking(["xdg-open", address])
         start_fallback_keep_alive()
         try:
             while True:
@@ -372,16 +375,6 @@ def _start_gui_private(
         except Exception as e:
             logger.error("Failed to start webview window.")
             logger.error(traceback.format_exc())
-            try:
-                subprocess.run(
-                    [
-                        "/usr/bin/notify-send",
-                        "--icon=error",
-                        f"TC2 Launcher Error: {e}",
-                    ]
-                )
-            except Exception:
-                pass
             window = None
     if not window:
         fallback_gui_main(entry, extra_options_str, branch)
