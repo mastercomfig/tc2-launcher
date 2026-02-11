@@ -4,7 +4,6 @@ import os
 import sys
 import threading
 import traceback
-import webbrowser
 from _thread import interrupt_main
 from pathlib import Path
 from time import sleep
@@ -20,14 +19,14 @@ from tc2_launcher.run import (
     get_prerelease,
     launch_game,
     open_install_folder,
-    run_blocking,
+    run_open,
     set_launch_options,
     set_prerelease,
     update_archive,
     wait_game_exit,
     wait_game_running,
 )
-from tc2_launcher.utils import DEV_INSTANCE
+from tc2_launcher.utils import DEV_INSTANCE, VERSION
 
 
 def get_window(idx: int = 0):
@@ -229,6 +228,7 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
                 {
                     "opts": extra_options,
                     "branch": branch,
+                    "version": VERSION,
                 }
             )
 
@@ -271,7 +271,7 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         app.add_routes(
             [
                 aiohttp.web.post(
-                    "/api/launch_options",
+                    "/api/set_launch_options",
                     ApiCallbackWithParamHandler(api.set_launch_options),
                 )
             ]
@@ -314,10 +314,12 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         site = aiohttp.web.TCPSite(runner, "localhost", 48564)
         await site.start()
         address = "http://localhost:48564/entry"
-        if os.name == "nt":
-            webbrowser.open(address)
-        else:
-            run_blocking(["xdg-open", address])
+        try:
+            run_open(address)
+        except Exception as e:
+            logger.error(f"Could not open fallback GUI: {e}")
+            pass
+        logger.info(f"Fallback GUI available at {address}")
         start_fallback_keep_alive()
         try:
             while True:
@@ -369,6 +371,7 @@ def _start_gui_private(
     if window:
         window.state.opts = extra_options_str
         window.state.branch = branch
+        window.state.version = VERSION
         window.events.loaded += lambda: on_loaded(window)
         try:
             webview.start(icon=str(entry_parent / "favicon.ico"), debug=DEV_INSTANCE)

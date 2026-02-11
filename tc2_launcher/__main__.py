@@ -19,9 +19,7 @@ from tc2_launcher.run import (
     update_archive,
     update_self,
 )
-from tc2_launcher.utils import DEV_INSTANCE
-
-version = "0.19.0"
+from tc2_launcher.utils import DEV_INSTANCE, VERSION
 
 updater_thread_queue: Optional[queue.Queue] = None
 should_launch_updater = True
@@ -100,7 +98,7 @@ def main():
 
         should_exit = False
 
-        if not DEV_INSTANCE and update_self(version):
+        if not DEV_INSTANCE and update_self(VERSION):
             should_exit = True
 
         should_launch_updater = False
@@ -111,7 +109,7 @@ def main():
 
         clean_self_update()
 
-    parser = argparse.ArgumentParser(description=f"TC2 Launcher v{version}")
+    parser = argparse.ArgumentParser(description=f"TC2 Launcher v{VERSION}")
     parser.add_argument(
         "--dest",
         default=None,

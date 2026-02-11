@@ -114,9 +114,16 @@
             height: 100%;
             background-color: rgb(33, 33, 33);
             color: rgb(222, 226, 230);
-            padding: 2rem;
+            padding-top: 1rem;
             overflow-y: auto;
             z-index: 5;
+        }
+
+        .menu-inner {
+            width: 100%;
+            padding: 0 2rem;
+            max-height: calc(100% - 4.75rem);
+            overflow: auto;
         }
 
         #launch-options {
@@ -173,18 +180,25 @@
         </div>
     </div>
     <div id="settings-menu" class="menu">
-        <h1>Settings</h1>
-        <h2>Launch Options</h2>
-        <input id="launch-options" type="text"></input>
-        <h2>Install Folder</h2>
-        <button id="open-folder-btn" class="btn btn-secondary" disabled>Browse Install Folder</button>
-        <button id="move-folder-btn" class="btn btn-secondary" disabled>Move Install Folder</button>
-        <h2>Updates</h2>
-        <input id="prerelease" type="checkbox"></input>
-        <label for="prerelease">Enable Pre-release Updates</label>
-        <p style="font-size: 1rem;color: #888888">Pre-release updates are less tested, may contain more bugs, and cannot
-            connect to official servers, but they provide access to newer features before they are officially released.
-        </p>
+        <div class="menu-inner">
+            <h1>Settings</h1>
+            <h2>Launch Options</h2>
+            <input id="launch-options" type="text"></input>
+            <h2>Install Folder</h2>
+            <button id="open-folder-btn" class="btn btn-secondary" disabled>Browse Install Folder</button>
+            <button id="move-folder-btn" class="btn btn-secondary" disabled>Move Install Folder</button>
+            <h2>Updates</h2>
+            <input id="prerelease" type="checkbox"></input>
+            <label for="prerelease">Enable Pre-release Updates</label>
+            <p style="font-size: 1rem;color: #888888">Pre-release updates are less tested, may contain more bugs, and
+                cannot
+                connect to official servers, but they provide access to newer features before they are officially
+                released.
+            </p>
+            <p style="font-size: 1rem;color: #888888;margin-top: 1rem">Launcher version: <span
+                    id="version">Unknown</span>
+            </p>
+        </div>
     </div>
     <script>
         let launchState = -1;
@@ -386,6 +400,7 @@
         queryWebApi("state").then(d => d.json()).then(async state => {
             document.getElementById("launch-options").value = state.opts;
             document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
+            document.getElementById("version").innerText = "v" + state.version;
 
             async function evalPump() {
                 await queryWebApi("eval").then(d => d.json()).then(queue => {
@@ -413,9 +428,11 @@
         window.addEventListener("pywebviewready", () => {
             document.getElementById("launch-options").value = window.pywebview?.state?.opts || "";
             document.getElementById("prerelease").checked = window.pywebview?.state?.branch === "prerelease" ? true : false;
+            document.getElementById("version").innerText = "v" + window.pywebview?.state?.version || "";
             window.pywebview.state.addEventListener("change", event => {
                 document.getElementById("launch-options").value = window.pywebview.state.opts;
                 document.getElementById("prerelease").checked = window.pywebview.state.branch === "prerelease" ? true : false;
+                document.getElementById("version").innerText = "v" + window.pywebview.state.version;
             })
         })
     </script>

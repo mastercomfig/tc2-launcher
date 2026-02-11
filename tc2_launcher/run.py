@@ -5,7 +5,9 @@ import subprocess
 import sys
 import tempfile
 import threading
+import webbrowser
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 from shutil import copytree, rmtree
 from time import sleep
@@ -244,11 +246,10 @@ def update_archive(
         tag = release.get("tag_name")
         if not tag:
             logger.error("Could not determine release tag.")
-            return fail_code
     except Exception as e:
         logger.error(f"Failed to fetch latest release info: {e}")
-        tag = ""
         release = {}
+        tag = ""
 
     state = read_state(dest)
     current_tag = state.get("tag")
@@ -321,6 +322,34 @@ def get_safe_posix_env() -> dict:
     elif "LD_LIBRARY_PATH" in new_env:
         del new_env["LD_LIBRARY_PATH"]
     return new_env
+
+
+@contextmanager
+def restore_system_env():
+    old_lib_path = os.environ.get("LD_LIBRARY_PATH")
+
+    try:
+        safe_env = get_safe_posix_env()
+        new_lib_path = safe_env.get("LD_LIBRARY_PATH")
+        if new_lib_path is not None:
+            os.environ["LD_LIBRARY_PATH"] = new_lib_path
+        elif old_lib_path is not None:
+            os.environ.pop("LD_LIBRARY_PATH")
+
+        yield
+    finally:
+        if old_lib_path is not None:
+            os.environ["LD_LIBRARY_PATH"] = old_lib_path
+        else:
+            os.environ.pop("LD_LIBRARY_PATH", None)
+
+
+def run_open(url: str):
+    if os.name == "nt":
+        webbrowser.open(url)
+    else:
+        with restore_system_env():
+            webbrowser.open(url)
 
 
 def run_blocking(cmd: list[str], cwd: Path | None = None) -> None:
