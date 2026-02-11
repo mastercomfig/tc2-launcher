@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import stat
@@ -48,6 +49,13 @@ def default_dest_dir() -> Path:
     return dest
 
 
+github_api_headers = {
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "TC2Launcher",
+}
+
+
 def _get_latest_release(dest: Path | None, repo: str) -> dict:
     if repo == TC2_REPO:
         if not dest:
@@ -59,24 +67,27 @@ def _get_latest_release(dest: Path | None, repo: str) -> dict:
                 f"https://api.github.com/repos/{repo}/releases",
                 timeout=30,
                 params={"per_page": 1},
+                headers=github_api_headers,
             )
             resp.raise_for_status()
             releases = resp.json()
             return releases[0] if releases else {}
 
     resp = requests.get(
-        f"https://api.github.com/repos/{repo}/releases/latest", timeout=30
+        f"https://api.github.com/repos/{repo}/releases/latest",
+        timeout=30,
+        headers=github_api_headers,
     )
     resp.raise_for_status()
     return resp.json()
 
 
-def _find_asset(release: dict, asset_filter: str) -> tuple[str, str] | None:
+def _find_asset(release: dict, asset_filter: str) -> tuple[str, str, str] | None:
     assets = release.get("assets", [])
     for a in assets:
         name = a.get("name", "")
         if asset_filter.lower() in name.lower():
-            return name, a.get("browser_download_url")
+            return name, a.get("browser_download_url"), a.get("digest")
     return None
 
 
@@ -110,7 +121,7 @@ def update_self(current_version: str) -> bool:
         )
         return False
 
-    asset_name, download_url = asset
+    asset_name, download_url, _ = asset
 
     dest_dir = default_dest_dir()
     download_path = dest_dir / "update" / tag / asset_name
@@ -202,6 +213,17 @@ def _download(url: str, dest_path: Path) -> None:
                     f.write(chunk)
 
 
+def _verify_digest(path: Path, digest: str) -> bool:
+    with open(path, "rb") as f:
+        algo, digest = digest.split(":", 1)
+        if algo == "sha256":
+            file_digest = hashlib.sha256(f.read()).hexdigest()
+        else:
+            logger.error(f"Unsupported hash algorithm: {algo}")
+            return True
+    return file_digest == digest
+
+
 # https://stackoverflow.com/a/54748564
 class ZipFileWithPermissions(zipfile.ZipFile):
     """Custom ZipFile class handling file permissions."""
@@ -253,6 +275,7 @@ def update_archive(
 
     state = read_state(dest)
     current_tag = state.get("tag")
+    current_digest = state.get("digest")
 
     if os.name == "nt":
         asset_filter = "game-win.zip"
@@ -260,19 +283,25 @@ def update_archive(
         asset_filter = "game-linux.zip"
 
     if tag:
-        if not force and current_tag == tag and fail_code == 1:
-            logger.info("Latest asset already downloaded.")
-            return 0
         asset = _find_asset(release, asset_filter)
         if not asset:
             logger.error(f"No asset matching '{asset_filter}' found in release {tag}.")
             return fail_code
-        asset_name, download_url = asset
+        asset_name, download_url, digest = asset
+        if (
+            not force
+            and current_tag == tag
+            and current_digest == digest
+            and fail_code == 1
+        ):
+            logger.info("Latest asset already downloaded.")
+            return 0
     else:
         asset_name = asset_filter
         download_url = (
             f"https://github.com/mastercomfig/tc2/releases/latest/download/{asset_name}"
         )
+        digest = None
 
     logger.info(f"Latest release tag: {tag}")
     logger.info(f"Current release tag: {current_tag}")
@@ -294,8 +323,15 @@ def update_archive(
         logger.info("Download complete.")
 
         logger.info(f"Extracting asset to {game_dir}...")
-        if asset_name.lower().endswith(".zip") and asset_path.exists():
-            _extract_zip(asset_path, game_dir)
+        if asset_path.exists():
+            asset_ok = True
+            if digest:
+                asset_ok = _verify_digest(asset_path, digest)
+            if not asset_ok:
+                logger.error("Asset verification failed.")
+                return fail_code
+            elif asset_name.lower().endswith(".zip"):
+                _extract_zip(asset_path, game_dir)
 
     if not game_dir.exists():
         logger.error(f"Game directory '{game_dir}' does not exist after extraction.")
@@ -308,8 +344,14 @@ def update_archive(
 
     logger.info("Extraction complete.")
 
+    written = False
     if tag:
         state["tag"] = tag
+        written = True
+    if digest:
+        state["digest"] = digest
+        written = True
+    if written:
         write_state(dest, state)
 
     return 0
