@@ -650,9 +650,13 @@ def open_install_folder(dest: Path | None = None) -> None:
         if os.name == "nt":
             os.startfile(game_dir)
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", game_dir])
+            run_non_blocking(["open", game_dir])
         else:
-            subprocess.Popen(["xdg-open", game_dir])
+            opener = "xdg-open"
+            xdg_desktop = os.getenv("XDG_CURRENT_DESKTOP", "").split(":")
+            if "KDE" in xdg_desktop or "KDE_FULL_SESSION" in os.environ:
+                opener = "kde-open5"
+            run_non_blocking([opener, game_dir])
 
 
 def change_install_folder(new_game_dir: Path):
