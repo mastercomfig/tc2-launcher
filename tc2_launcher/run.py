@@ -62,7 +62,8 @@ def _get_latest_release(dest: Path | None, repo: str) -> dict:
             dest = default_dest_dir()
 
         settings = read_settings(dest)
-        if settings.get("branch", "") == "prerelease":
+        branch = settings.get("branch")
+        if branch == "prerelease":
             resp = requests.get(
                 f"https://api.github.com/repos/{repo}/releases",
                 timeout=30,
@@ -72,6 +73,17 @@ def _get_latest_release(dest: Path | None, repo: str) -> dict:
             resp.raise_for_status()
             releases = resp.json()
             return releases[0] if releases else {}
+        elif branch and branch[0].isdigit():
+            try:
+                resp = requests.get(
+                    f"https://api.github.com/repos/{repo}/releases/tags/{branch}",
+                    timeout=30,
+                    headers=github_api_headers,
+                )
+                resp.raise_for_status()
+                return resp.json()
+            except Exception as e:
+                logger.error(f"Failed to get release for branch {branch}, falling back to latest: {e}")
 
     resp = requests.get(
         f"https://api.github.com/repos/{repo}/releases/latest",
