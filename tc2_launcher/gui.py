@@ -15,6 +15,7 @@ import webview
 from tc2_launcher import logger
 from tc2_launcher.run import (
     change_install_folder,
+    get_game_version,
     get_launch_options,
     get_prerelease,
     launch_game,
@@ -22,6 +23,7 @@ from tc2_launcher.run import (
     run_open,
     set_launch_options,
     set_prerelease,
+    subscribe_game_version_change,
     update_archive,
     wait_game_exit,
     wait_game_running,
@@ -224,11 +226,14 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
 
         async def state_handler(r: aiohttp.web.Request):
             on_loaded(None)
+            tag, digest = get_game_version()
             return aiohttp.web.json_response(
                 {
                     "opts": extra_options,
                     "branch": branch,
                     "version": VERSION,
+                    "game_version": tag if tag is not None else "Unknown",
+                    "game_version_digest": digest if digest is not None else "",
                 }
             )
 
@@ -372,10 +377,21 @@ def _start_gui_private(
         window.state.opts = extra_options_str
         window.state.branch = branch
         window.state.version = VERSION
+        # state needs empty init
+        window.state.game_version = "Unknown"
+        window.state.game_version_digest = ""
         window.events.loaded += lambda: on_loaded(window)
+
+        # then subscribe
+        def on_game_version_change(tag, digest):
+            window.state.game_version = tag if tag is not None else "Unknown"
+            window.state.game_version_digest = digest if digest is not None else ""
+
+        subscribe_game_version_change(on_game_version_change)
+
         try:
             webview.start(icon=str(entry_parent / "favicon.ico"), debug=DEV_INSTANCE)
-        except Exception as e:
+        except Exception:
             logger.error("Failed to start webview window.")
             logger.error(traceback.format_exc())
             window = None

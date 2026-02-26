@@ -1,4 +1,5 @@
 import hashlib
+import importlib.util
 import json
 import os
 import stat
@@ -13,11 +14,13 @@ from pathlib import Path
 from shutil import copytree, rmtree
 from time import sleep
 from timeit import default_timer as timer
+from typing import Callable
 
 import psutil
 import requests
 
 from tc2_launcher import logger
+from tc2_launcher.utils import DEV_INSTANCE
 
 TC2_REPO = "mastercomfig/tc2"
 LAUNCHER_REPO = "mastercomfig/tc2-launcher"
@@ -83,7 +86,9 @@ def _get_latest_release(dest: Path | None, repo: str) -> dict:
                 resp.raise_for_status()
                 return resp.json()
             except Exception as e:
-                logger.error(f"Failed to get release for branch {branch}, falling back to latest: {e}")
+                logger.error(
+                    f"Failed to get release for branch {branch}, falling back to latest: {e}"
+                )
 
     resp = requests.get(
         f"https://api.github.com/repos/{repo}/releases/latest",
@@ -120,12 +125,8 @@ def update_self(current_version: str) -> bool:
         asset_filter = ".exe"
     else:
         asset_filter = "-linux"
-        try:
-            import qtpy
-
+        if importlib.util.find_spec("qtpy") is not None:
             asset_filter += "-qt"
-        except ImportError:
-            pass
     asset = _find_asset(release, asset_filter)
     if not asset:
         logger.error(
@@ -262,6 +263,31 @@ def _extract_zip(zip_path: Path, extract_dir: Path):
             zf.extractall(extract_dir)
 
 
+game_version_callbacks: list[Callable[[str | None, str | None], None]] = []
+game_tag: str | None = None
+game_digest: str | None = None
+
+
+def get_game_version() -> tuple[str | None, str | None]:
+    return game_tag, game_digest
+
+
+def _set_game_version(tag: str | None, digest: str | None) -> None:
+    global game_tag, game_digest
+    game_tag = tag
+    game_digest = digest
+    for callback in game_version_callbacks:
+        callback(tag, digest)
+
+
+def subscribe_game_version_change(
+    callback: Callable[[str | None, str | None], None],
+) -> None:
+    global game_tag, game_digest
+    callback(game_tag, game_digest)
+    game_version_callbacks.append(callback)
+
+
 def update_archive(
     dest: Path | None = None,
     force: bool = False,
@@ -288,6 +314,8 @@ def update_archive(
     state = read_state(dest)
     current_tag = state.get("tag")
     current_digest = state.get("digest")
+
+    _set_game_version(current_tag, current_digest)
 
     if os.name == "nt":
         asset_filter = "game-win.zip"
@@ -364,17 +392,31 @@ def update_archive(
         state["digest"] = digest
         written = True
     if written:
+        _set_game_version(tag, digest)
         write_state(dest, state)
 
     return 0
 
 
-def get_safe_posix_env() -> dict:
+def get_safe_env() -> dict:
     new_env = os.environ.copy()
-    if "LD_LIBRARY_PATH_ORIG" in new_env:
-        new_env["LD_LIBRARY_PATH"] = new_env["LD_LIBRARY_PATH_ORIG"]
-    elif "LD_LIBRARY_PATH" in new_env:
-        del new_env["LD_LIBRARY_PATH"]
+    if os.name == "posix":
+        if "LD_LIBRARY_PATH_ORIG" in new_env:
+            new_env["LD_LIBRARY_PATH"] = new_env["LD_LIBRARY_PATH_ORIG"]
+        elif "LD_LIBRARY_PATH" in new_env:
+            del new_env["LD_LIBRARY_PATH"]
+    elif os.name == "nt":
+        if not DEV_INSTANCE and hasattr(sys, "_MEIPASS"):
+            meipass = getattr(sys, "_MEIPASS", "")
+            if meipass:
+                paths = new_env.get("PATH", "").split(os.pathsep)
+                paths = [
+                    p
+                    for p in paths
+                    if p
+                    and os.path.normpath(p).lower() != os.path.normpath(meipass).lower()
+                ]
+                new_env["PATH"] = os.pathsep.join(paths)
     return new_env
 
 
@@ -383,7 +425,7 @@ def restore_system_env():
     old_lib_path = os.environ.get("LD_LIBRARY_PATH")
 
     try:
-        safe_env = get_safe_posix_env()
+        safe_env = get_safe_env()
         new_lib_path = safe_env.get("LD_LIBRARY_PATH")
         if new_lib_path is not None:
             os.environ["LD_LIBRARY_PATH"] = new_lib_path
@@ -408,10 +450,10 @@ def run_open(url: str):
 
 def run_blocking(cmd: list[str], cwd: Path | None = None) -> None:
     if os.name == "nt":
-        subprocess.run(cmd, cwd=cwd)
+        subprocess.run(cmd, env=get_safe_env(), cwd=cwd)
     else:
         cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
-        subprocess.run(cmd, env=get_safe_posix_env(), cwd=cwd, shell=True)
+        subprocess.run(cmd, env=get_safe_env(), cwd=cwd, shell=True)
 
 
 def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
@@ -423,20 +465,26 @@ def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
         if os.name == "nt":
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            creationflags = subprocess.CREATE_NO_WINDOW
+            creationflags = (
+                subprocess.CREATE_NO_WINDOW
+                | subprocess.DETACHED_PROCESS
+                | subprocess.CREATE_NEW_PROCESS_GROUP
+            )
             subprocess.Popen(
                 cmd,
+                env=get_safe_env(),
                 cwd=cwd,
                 startupinfo=startupinfo,
                 creationflags=creationflags,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                close_fds=True,
             )
         elif os.name == "posix":
             subprocess.Popen(
                 cmd,
-                env=get_safe_posix_env(),
+                env=get_safe_env(),
                 cwd=cwd,
                 shell=True,
                 start_new_session=True,

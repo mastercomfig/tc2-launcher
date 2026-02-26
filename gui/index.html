@@ -139,6 +139,13 @@
             vertical-align: middle;
             color: rgb(180, 180, 180);
         }
+
+        #game-version-digest {
+            font-size: 0.75rem;
+            color: rgb(107, 107, 107);
+            margin-left: 1rem;
+            vertical-align: top;
+        }
     </style>
 </head>
 
@@ -198,6 +205,9 @@
             <p style="font-size: 1rem;color: #888888;margin-top: 1rem">Launcher version: <span
                     id="version">Unknown</span>
             </p>
+            <p style="font-size: 1rem;color: #888888;margin-top: 0.2rem">Game version: <span
+                    id="game-version">Unknown</span> <span id="game-version-digest"></span>
+            </p>
         </div>
     </div>
     <script>
@@ -234,6 +244,10 @@
 
         function updateUpdateBtnDisabled() {
             document.getElementById("update-btn").disabled = launchState !== 0;
+        }
+
+        function updatePrereleaseDisabled() {
+            document.getElementById("prerelease").disabled = launchState !== 0;
         }
 
         function updateOpenFolderBtnDisabled() {
@@ -278,6 +292,7 @@
             updateLaunchBtnText();
             updateLaunchBtnDisabled();
             updateUpdateBtnDisabled();
+            updatePrereleaseDisabled();
             updateOpenFolderBtnDisabled();
             updateMoveFolderBtnDisabled();
         }
@@ -401,6 +416,8 @@
             document.getElementById("launch-options").value = state.opts;
             document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
             document.getElementById("version").innerText = "v" + state.version;
+            document.getElementById("game-version").innerText = state.game_version;
+            document.getElementById("game-version-digest").innerText = state.game_version_digest;
 
             async function evalPump() {
                 await queryWebApi("eval").then(d => d.json()).then(queue => {
@@ -429,10 +446,14 @@
             document.getElementById("launch-options").value = window.pywebview?.state?.opts || "";
             document.getElementById("prerelease").checked = window.pywebview?.state?.branch === "prerelease" ? true : false;
             document.getElementById("version").innerText = "v" + window.pywebview?.state?.version || "";
+            document.getElementById("game-version").innerText = window.pywebview?.state?.game_version || "";
+            document.getElementById("game-version-digest").innerText = window.pywebview?.state?.game_version_digest || "";
             window.pywebview.state.addEventListener("change", event => {
                 document.getElementById("launch-options").value = window.pywebview.state.opts;
                 document.getElementById("prerelease").checked = window.pywebview.state.branch === "prerelease" ? true : false;
                 document.getElementById("version").innerText = "v" + window.pywebview.state.version;
+                document.getElementById("game-version").innerText = window.pywebview.state.game_version;
+                document.getElementById("game-version-digest").innerText = window.pywebview.state.game_version_digest;
             })
         })
     </script>
