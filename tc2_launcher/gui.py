@@ -38,12 +38,16 @@ def get_window(idx: int = 0):
 eval_queue: list[str] = []
 
 
+def evaluate_js_thread(script: str):
+    get_window().evaluate_js(script)
+
+
 def send_eval(script: str):
     global using_fallback
     if using_fallback:
         eval_queue.append(script)
     else:
-        get_window().evaluate_js(script)
+        threading.Thread(target=evaluate_js_thread, args=(script,)).start()
 
 
 def get_entrypoint():
