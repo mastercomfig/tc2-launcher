@@ -384,6 +384,8 @@ def _start_gui_private(
 
         # then subscribe
         def on_game_version_change(tag, digest):
+            if window is None:
+                return
             window.state.game_version = tag if tag is not None else "Unknown"
             window.state.game_version_digest = digest if digest is not None else ""
 
