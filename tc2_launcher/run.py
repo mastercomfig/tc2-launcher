@@ -713,11 +713,8 @@ def open_install_folder(dest: Path | None = None) -> None:
         elif sys.platform == "darwin":
             run_non_blocking(["open", game_dir])
         else:
-            opener = "xdg-open"
-            xdg_desktop = os.getenv("XDG_CURRENT_DESKTOP", "").split(":")
-            if "KDE" in xdg_desktop or "KDE_FULL_SESSION" in os.environ:
-                opener = "kde-open5"
-            run_non_blocking([opener, game_dir])
+            # todo: what about gtk-launch? gtk4-launch? gio launch? kde-open? kde-open6? kde-open5? exo-open? gvfs-open? bleh.
+            run_non_blocking(["xdg-open", game_dir])
 
 
 def change_install_folder(new_game_dir: Path):
