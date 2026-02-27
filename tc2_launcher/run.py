@@ -707,6 +707,7 @@ def open_install_folder(dest: Path | None = None) -> None:
 
     game_dir = get_game_dir(dest)
     if game_dir.exists() and game_dir.is_dir():
+        game_dir = str(game_dir)
         if os.name == "nt":
             os.startfile(game_dir)
         elif sys.platform == "darwin":

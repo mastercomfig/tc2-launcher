@@ -40,6 +40,7 @@
         #logo-container {
             text-align: center;
             padding-top: 1rem;
+            cursor: pointer;
         }
 
         #app {
@@ -61,6 +62,10 @@
         }
 
         #news-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             flex-grow: 1;
             width: 100%;
         }
@@ -151,12 +156,12 @@
 
 <body>
     <div id="app">
-        <div id="logo-container">
+        <div id="logo-container" title="News feed">
             <img src="tc2.png" class="logo" />
         </div>
         <div id="news-container">
-            <iframe id="news-frame" src="https://teamcomtress.com/launcher_feed"
-                style="border: none; width: 100%; height: 100%;"></iframe>
+            <iframe id="news-frame" src="about:blank" style="border: none; width: 100%; height: 100%" credentialless
+                loading="lazy"></iframe>
         </div>
         <div id="launch-bar">
             <div class="spacer"></div>
@@ -202,7 +207,7 @@
                 connect to official servers, but they provide access to newer features before they are officially
                 released.
             </p>
-            <p style="font-size: 1rem;color: #888888;margin-top: 1rem">Launcher version: <span
+            <p style="font-size: 1rem;color: #888888;margin-top: 1rem;margin-bottom: 0">Launcher version: <span
                     id="version">Unknown</span>
             </p>
             <p style="font-size: 1rem;color: #888888;margin-top: 0.2rem">Game version: <span
@@ -412,12 +417,30 @@
 
         let pumpTimeout = null;
 
+        const launcherFeed = "https://teamcomtress.com/launcher_feed/";
+
+        function tryLauncherFeed() {
+            fetch(launcherFeed).then((r) => { if (r.ok) { return r; } else { throw new Error(`${r.status}${r.statusText ? ` ${r.statusText}` : ""}`); } }).then(() => {
+                // double fetch, but what can we do?
+                document.getElementById("news-frame").src = launcherFeed;
+            }).catch(err => {
+                document.getElementById("news-container").innerHTML = `<div style="text-align: center;margin-top: -0.5rem"><strong>Failed to fetch news :(</strong> <br/> <code style="color: #ffaaaa;">${err}</code></div>`;
+                console.error("Failed to fetch news:", err);
+            });
+        }
+
+        document.getElementById("logo-container").addEventListener("click", () => {
+            tryLauncherFeed();
+        });
+
         queryWebApi("state").then(d => d.json()).then(async state => {
             document.getElementById("launch-options").value = state.opts;
             document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
             document.getElementById("version").innerText = "v" + state.version;
             document.getElementById("game-version").innerText = state.game_version;
             document.getElementById("game-version-digest").innerText = state.game_version_digest;
+
+            tryLauncherFeed();
 
             async function evalPump() {
                 await queryWebApi("eval").then(d => d.json()).then(queue => {
@@ -429,7 +452,7 @@
             }
 
             evalPump();
-        });
+        }).catch(() => { console.log("Failed to get state from fallback API, assuming pywebview is available."); })
 
         function clearEvalPump() {
             if (pumpTimeout) {
@@ -448,6 +471,9 @@
             document.getElementById("version").innerText = "v" + window.pywebview?.state?.version || "";
             document.getElementById("game-version").innerText = window.pywebview?.state?.game_version || "";
             document.getElementById("game-version-digest").innerText = window.pywebview?.state?.game_version_digest || "";
+
+            tryLauncherFeed();
+
             window.pywebview.state.addEventListener("change", event => {
                 document.getElementById("launch-options").value = window.pywebview.state.opts;
                 document.getElementById("prerelease").checked = window.pywebview.state.branch === "prerelease" ? true : false;

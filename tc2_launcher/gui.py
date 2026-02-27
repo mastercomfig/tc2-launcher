@@ -185,13 +185,19 @@ def fallback_keep_alive():
     global last_eval_time
     watch_start_time = timer()
     while True:
-        sleep(10 if last_eval_time is None else 2)
+        sleep(60 if last_eval_time is None else 2)
         if sys.is_finalizing():
             return
-        keepalive_time = 10
+        # todo: blocking async is causing issues.
+        # archive is downloaded with requests library, it should be aiohttp.
+        # we need to create an async API and have the CLI, fallback use it,
+        # and have an entrypoint for pywebview.
+        # for now though, i will keep the keepalive at 60 seconds to prevent
+        # the process from exiting.
+        keepalive_time = 60
         if last_eval_time is not None:
             watch_start_time = last_eval_time
-            keepalive_time = 2
+            keepalive_time = 5
         if timer() - watch_start_time >= keepalive_time:
             if os.name == "nt":
                 interrupt_main()
@@ -337,6 +343,7 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
             pass
         finally:
             await runner.cleanup()
+        logger.info("Exiting fallback GUI")
     except Exception as e:
         logger.error(f"Could not start fallback GUI: {e}")
 
