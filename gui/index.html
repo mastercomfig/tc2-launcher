@@ -160,8 +160,10 @@
             <img src="tc2.png" class="logo" />
         </div>
         <div id="news-container">
-            <iframe id="news-frame" src="about:blank" style="border: none; width: 100%; height: 100%" credentialless
-                loading="lazy"></iframe>
+            <iframe id="news-frame" src="about:blank" style="border: none; width: 100%; height: 100%; display: none"
+                credentialless loading="lazy"></iframe>
+            <div id="news-status" style="text-align: center;margin-top: -0.5rem;display: block"><strong>Fetching news
+                    feed...</strong></div>
         </div>
         <div id="launch-bar">
             <div class="spacer"></div>
@@ -423,9 +425,13 @@
             fetch(launcherFeed).then((r) => { if (r.ok) { return r; } else { throw new Error(`${r.status}${r.statusText ? ` ${r.statusText}` : ""}`); } }).then(() => {
                 // double fetch, but what can we do?
                 document.getElementById("news-frame").src = launcherFeed;
+                document.getElementById("news-status").style.display = "none";
+                document.getElementById("news-frame").style.display = "block";
             }).catch(err => {
-                document.getElementById("news-container").innerHTML = `<div style="text-align: center;margin-top: -0.5rem"><strong>Failed to fetch news :(</strong> <br/> <code style="color: #ffaaaa;">${err}</code></div>`;
+                document.getElementById("news-status").innerHTML = `<strong>Failed to fetch news :(</strong> <br/> <code style="color: #ffaaaa;">${err}</code>`;
                 console.error("Failed to fetch news:", err);
+                document.getElementById("news-status").style.display = "block";
+                document.getElementById("news-frame").style.display = "none";
             });
         }
 
