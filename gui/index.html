@@ -432,6 +432,7 @@
                 console.error("Failed to fetch news:", err);
                 document.getElementById("news-status").style.display = "block";
                 document.getElementById("news-frame").style.display = "none";
+                setTimeout(tryLauncherFeed, 500);
             });
         }
 

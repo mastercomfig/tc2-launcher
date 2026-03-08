@@ -77,10 +77,12 @@ class Api:
         else:
             options = None
         set_launch_options(extra_options=options)
+        get_window().state.opts = options
 
     def set_prerelease(self, prerelease: str):
         if isinstance(prerelease, str):
             set_prerelease(prerelease=prerelease)
+        get_window().state.branch = prerelease
 
     def check_for_updates(self):
         res = update_archive()
