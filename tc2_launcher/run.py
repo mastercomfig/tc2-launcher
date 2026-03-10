@@ -457,31 +457,19 @@ def run_blocking(cmd: list[str], cwd: Path | None = None) -> None:
 
 
 def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
-    if os.name == "posix":
-        cmd.insert(0, "nohup")
-        cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
-
     try:
         if os.name == "nt":
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            creationflags = (
-                subprocess.CREATE_NO_WINDOW
-                | subprocess.DETACHED_PROCESS
-                | subprocess.CREATE_NEW_PROCESS_GROUP
+            args_str = subprocess.list2cmdline([str(c) for c in cmd[1:]])
+            os.startfile(
+                str(cmd[0]),
+                operation="open",
+                arguments=args_str,
+                cwd=str(cwd) if cwd else None,
+                show_cmd=0,
             )
-            subprocess.Popen(
-                cmd,
-                env=get_safe_env(),
-                cwd=cwd,
-                startupinfo=startupinfo,
-                creationflags=creationflags,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                close_fds=True,
-            )
-        elif os.name == "posix":
+        else:
+            cmd.insert(0, "nohup")
+            cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
             subprocess.Popen(
                 cmd,
                 env=get_safe_env(),
@@ -493,7 +481,8 @@ def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
                 stderr=subprocess.DEVNULL,
             )
     except Exception as e:
-        logger.error(f"Failed to run command {' '.join(cmd)}: {e}")
+        cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+        logger.error(f"Failed to run command {cmd_str}: {e}")
 
 
 def get_game_dir(dest: Path | None = None) -> Path:
@@ -562,7 +551,6 @@ def launch_game(
         "-steam",
         "-particles",
         "1",
-        "-condebug",
         "-nobreakpad",
         "-nominidumps",
     ]

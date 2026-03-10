@@ -195,7 +195,7 @@
     </div>
     <div id="settings-menu" class="menu">
         <div class="menu-inner">
-            <h1>Settings</h1>
+            <h1 style="margin-top: 0rem">Settings</h1>
             <h2>Launch Options</h2>
             <input id="launch-options" type="text"></input>
             <h2>Install Folder</h2>
@@ -430,9 +430,18 @@
             document.getElementById("update-btn").click();
         });
 
+        function formatVersion(versionStr) {
+            if (!versionStr || versionStr.length < 1) {
+                return "Unknown";
+            }
+            return !isNaN(versionStr.charAt(0)) ? "v" + versionStr : versionStr;
+        }
+
         let pumpTimeout = null;
 
         const launcherFeed = "https://teamcomtress.com/launcher_feed/";
+
+        let shouldError = false;
 
         function tryLauncherFeed() {
             fetch(launcherFeed).then((r) => { if (r.ok) { return r; } else { throw new Error(`${r.status}${r.statusText ? ` ${r.statusText}` : ""}`); } }).then(() => {
@@ -441,11 +450,15 @@
                 document.getElementById("news-status").style.display = "none";
                 document.getElementById("news-frame").style.display = "block";
             }).catch(err => {
-                document.getElementById("news-status").innerHTML = `<strong>Failed to fetch news :(</strong> <br/> <code style="color: #ffaaaa;">${err}</code>`;
+                // for the first failure, do not show error. and simply silently keep loading for the second retry. then, show the error from that point on.
+                if (shouldError) {
+                    document.getElementById("news-status").innerHTML = `<strong>Failed to fetch news :(</strong> <br/> <code style="color: #ffaaaa;">${err}</code>`;
+                }
+                shouldError = true;
                 console.error("Failed to fetch news:", err);
                 document.getElementById("news-status").style.display = "block";
                 document.getElementById("news-frame").style.display = "none";
-                setTimeout(tryLauncherFeed, 500);
+                setTimeout(tryLauncherFeed, 1500);
             });
         }
 
@@ -457,10 +470,10 @@
             return queryWebApi("state", update ? "1" : "").then(d => d.json()).then(state => {
                 document.getElementById("launch-options").value = state.opts;
                 document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
-                document.getElementById("version").innerText = "v" + state.version;
-                document.getElementById("game-version").innerText = state.game_version;
+                document.getElementById("version").innerText = formatVersion(state.version);
+                document.getElementById("game-version").innerText = formatVersion(state.game_version);
                 document.getElementById("game-version-digest").innerText = state.game_version_digest;
-            }).catch(() => { console.log("Failed to get state from fallback API, assuming pywebview is available."); });
+            });
         }
 
         requestStateUpdate(false).then(async () => {
@@ -476,7 +489,7 @@
             }
 
             evalPump();
-        });
+        }).catch(() => { console.log("Failed to get state from fallback API, assuming pywebview is available."); });
 
         function clearEvalPump() {
             if (pumpTimeout) {
@@ -489,11 +502,11 @@
             clearEvalPump();
         });
 
-        window.addEventListener("pywebviewready", () => {
+        function loadPywebview() {
             document.getElementById("launch-options").value = window.pywebview?.state?.opts || "";
             document.getElementById("prerelease").checked = window.pywebview?.state?.branch === "prerelease" ? true : false;
-            document.getElementById("version").innerText = "v" + window.pywebview?.state?.version || "";
-            document.getElementById("game-version").innerText = window.pywebview?.state?.game_version || "";
+            document.getElementById("version").innerText = formatVersion(window.pywebview?.state?.version);
+            document.getElementById("game-version").innerText = formatVersion(window.pywebview?.state?.game_version);
             document.getElementById("game-version-digest").innerText = window.pywebview?.state?.game_version_digest || "";
 
             tryLauncherFeed();
@@ -501,11 +514,17 @@
             window.pywebview.state.addEventListener("change", event => {
                 document.getElementById("launch-options").value = window.pywebview.state.opts;
                 document.getElementById("prerelease").checked = window.pywebview.state.branch === "prerelease" ? true : false;
-                document.getElementById("version").innerText = "v" + window.pywebview.state.version;
-                document.getElementById("game-version").innerText = window.pywebview.state.game_version;
+                document.getElementById("version").innerText = formatVersion(window.pywebview.state.version);
+                document.getElementById("game-version").innerText = formatVersion(window.pywebview.state.game_version);
                 document.getElementById("game-version-digest").innerText = window.pywebview.state.game_version_digest;
-            })
-        })
+            });
+        }
+
+        if (window.pywebview) {
+            loadPywebview();
+        } else {
+            window.addEventListener("pywebviewready", () => loadPywebview());
+        }
     </script>
 </body>
 

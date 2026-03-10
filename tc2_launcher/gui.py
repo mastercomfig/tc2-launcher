@@ -36,7 +36,7 @@ state = {
     "opts": None,
     "branch": None,
     "version": VERSION,
-    "game_version": "Unknown",
+    "game_version": "",
     "game_version_digest": "",
 }
 
@@ -167,7 +167,13 @@ def check_queue():
             return
 
 
-def on_loaded(window):
+has_init = False
+
+
+def on_loaded():
+    global has_init
+    if using_fallback:
+        return
     global queue_thread
     if current_queue is not None and queue_thread is None:
         queue_thread = threading.Thread(target=check_queue)
@@ -176,6 +182,13 @@ def on_loaded(window):
         return
     if not check_launch_game(-1):
         update_and_notify()
+    if has_init:
+        # if we refresh the page, we need a little kick to the state since the page reverted back to initial state
+        window = get_window()
+        for k, v in window.state.items():
+            window.state.__setattr__(k, "")
+            window.state.__setattr__(k, v)
+    has_init = True
 
 
 entry_parent = get_entrypoint()
@@ -428,9 +441,9 @@ def _start_gui_private(
 
     def subscribe_game_version():
         def on_game_version_change(tag, digest):
-            game_version = tag if tag is not None else "Unknown"
+            game_version = tag if tag is not None else ""
             game_version_digest = digest if digest is not None else ""
-            if window is None:
+            if using_fallback:
                 state["game_version"] = game_version
                 state["game_version_digest"] = game_version_digest
                 send_eval("requestStateUpdate();")
@@ -445,9 +458,9 @@ def _start_gui_private(
         window.state.branch = branch
         window.state.version = VERSION
         # state needs empty init
-        window.state.game_version = "Unknown"
+        window.state.game_version = ""
         window.state.game_version_digest = ""
-        window.events.loaded += lambda: on_loaded(window)
+        window.events.loaded += on_loaded
 
         # then subscribe
         subscribe_game_version()
