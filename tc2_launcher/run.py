@@ -724,6 +724,8 @@ def change_install_folder(new_game_dir: Path):
             new_game_dir = new_game_dir / "tc2"
         new_game_dir = new_game_dir.resolve()
         new_game_dir.mkdir(parents=True, exist_ok=True)
+        if not new_game_dir.exists() or not new_game_dir.is_dir():
+            raise Exception("Failed to create directory")
     except Exception as e:
         logger.error(f"Invalid path '{new_game_dir}': {e}")
         return

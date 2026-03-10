@@ -204,7 +204,8 @@
             <h2>Updates</h2>
             <input id="prerelease" type="checkbox"></input>
             <label for="prerelease">Enable Pre-release Updates</label>
-            <p style="font-size: 1rem;color: #888888">Pre-release updates are less tested, may contain more bugs, and
+            <p style="font-size: 1rem;color: #888888;margin-top: 0.2rem">Pre-release updates are less tested, may
+                contain more bugs, and
                 cannot
                 connect to official servers, but they provide access to newer features before they are officially
                 released.
@@ -345,7 +346,19 @@
                 if (window.pywebview) {
                     window.pywebview.api.move_install_folder();
                 } else {
-                    queryWebApi("move_install_folder");
+                    queryWebApi("get_install_folder")
+                        .then((r) => r.json())
+                        .then((r) => r.path)
+                        .then((path) => {
+                            if (!path) {
+                                queryWebApi("move_install_folder");
+                            } else {
+                                path = prompt("Enter a new install folder:", path);
+                                if (path && path.length > 0) {
+                                    queryWebApi("move_install_folder", path);
+                                }
+                            }
+                        });
                 }
             }
 
@@ -440,13 +453,17 @@
             tryLauncherFeed();
         });
 
-        queryWebApi("state").then(d => d.json()).then(async state => {
-            document.getElementById("launch-options").value = state.opts;
-            document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
-            document.getElementById("version").innerText = "v" + state.version;
-            document.getElementById("game-version").innerText = state.game_version;
-            document.getElementById("game-version-digest").innerText = state.game_version_digest;
+        function requestStateUpdate(update = true) {
+            return queryWebApi("state", update ? "1" : "").then(d => d.json()).then(state => {
+                document.getElementById("launch-options").value = state.opts;
+                document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
+                document.getElementById("version").innerText = "v" + state.version;
+                document.getElementById("game-version").innerText = state.game_version;
+                document.getElementById("game-version-digest").innerText = state.game_version_digest;
+            }).catch(() => { console.log("Failed to get state from fallback API, assuming pywebview is available."); });
+        }
 
+        requestStateUpdate(false).then(async () => {
             tryLauncherFeed();
 
             async function evalPump() {
@@ -459,7 +476,7 @@
             }
 
             evalPump();
-        }).catch(() => { console.log("Failed to get state from fallback API, assuming pywebview is available."); })
+        });
 
         function clearEvalPump() {
             if (pumpTimeout) {

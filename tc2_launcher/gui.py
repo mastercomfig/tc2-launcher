@@ -15,7 +15,7 @@ import webview
 from tc2_launcher import logger
 from tc2_launcher.run import (
     change_install_folder,
-    get_game_version,
+    get_game_dir,
     get_launch_options,
     get_prerelease,
     launch_game,
@@ -30,6 +30,16 @@ from tc2_launcher.run import (
 )
 from tc2_launcher.utils import DEV_INSTANCE, VERSION
 
+using_fallback = False
+
+state = {
+    "opts": None,
+    "branch": None,
+    "version": VERSION,
+    "game_version": "Unknown",
+    "game_version_digest": "",
+}
+
 
 def get_window(idx: int = 0):
     return webview.windows[idx]
@@ -43,7 +53,6 @@ def evaluate_js_thread(script: str):
 
 
 def send_eval(script: str):
-    global using_fallback
     if using_fallback:
         eval_queue.append(script)
     else:
@@ -77,12 +86,20 @@ class Api:
         else:
             options = None
         set_launch_options(extra_options=options)
-        get_window().state.opts = options
+        if using_fallback:
+            state["opts"] = options
+            send_eval("requestStateUpdate();")
+        else:
+            get_window().state.opts = options
 
     def set_prerelease(self, prerelease: str):
         if isinstance(prerelease, str):
             set_prerelease(prerelease=prerelease)
-        get_window().state.branch = prerelease
+        if using_fallback:
+            state["branch"] = prerelease
+            send_eval("requestStateUpdate();")
+        else:
+            get_window().state.branch = prerelease
 
     def check_for_updates(self):
         res = update_archive()
@@ -91,12 +108,18 @@ class Api:
     def open_install_folder(self):
         open_install_folder()
 
-    def move_install_folder(self):
+    def move_install_folder(self, path: str | None = None):
         try:
-            result = get_window().create_file_dialog(webview.FileDialog.FOLDER)
-            if not result:
-                return
-            path = result[0]
+            if path is None:
+                if using_fallback:
+                    return
+                window = get_window()
+                if not window:
+                    return
+                result = window.create_file_dialog(webview.FileDialog.FOLDER)
+                if not result:
+                    return
+                path = result[0]
             new_game_dir = Path(path).resolve()
             change_install_folder(new_game_dir)
         except Exception as e:
@@ -161,7 +184,11 @@ current_queue: Optional[multiprocessing.Queue] = None
 
 
 def close_gui():
+    if using_fallback:
+        return
     window = get_window()
+    if not window:
+        return
     window.destroy()
 
 
@@ -216,11 +243,11 @@ def start_fallback_keep_alive():
     fallback_keep_alive_thread.start()
 
 
-using_fallback = False
-
-
 async def start_fallback_gui(entry: str, extra_options: str, branch: str):
     global last_eval_time
+    # init state
+    state["opts"] = extra_options
+    state["branch"] = branch
     # start a local http server and return the address
     try:
         import aiohttp.web
@@ -237,17 +264,10 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         app.add_routes([aiohttp.web.get("/entry", index)])
 
         async def state_handler(r: aiohttp.web.Request):
-            on_loaded(None)
-            tag, digest = get_game_version()
-            return aiohttp.web.json_response(
-                {
-                    "opts": extra_options,
-                    "branch": branch,
-                    "version": VERSION,
-                    "game_version": tag if tag is not None else "Unknown",
-                    "game_version_digest": digest if digest is not None else "",
-                }
-            )
+            update = await r.text()
+            if not update:
+                on_loaded(None)
+            return aiohttp.web.json_response(state)
 
         app.add_routes([aiohttp.web.post("/api/state", state_handler)])
 
@@ -260,6 +280,26 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
             return aiohttp.web.json_response(to_send)
 
         app.add_routes([aiohttp.web.post("/api/eval", eval_handler)])
+
+        async def move_install_folder_handler(r: aiohttp.web.Request):
+            path = await r.text()
+            if path:
+                api.move_install_folder(path)
+            else:
+                api.move_install_folder()
+            return aiohttp.web.Response()
+
+        app.add_routes(
+            [aiohttp.web.post("/api/move_install_folder", move_install_folder_handler)]
+        )
+
+        async def get_install_folder_handler(r: aiohttp.web.Request):
+            path = str(get_game_dir())
+            return aiohttp.web.json_response({"path": path})
+
+        app.add_routes(
+            [aiohttp.web.post("/api/get_install_folder", get_install_folder_handler)]
+        )
 
         class ApiCallbackHandler:
             def __init__(self, func, param=False):
@@ -317,14 +357,6 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
                 )
             ]
         )
-        app.add_routes(
-            [
-                aiohttp.web.post(
-                    "/api/move_install_folder",
-                    ApiCallbackHandler(api.move_install_folder),
-                )
-            ]
-        )
 
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()
@@ -346,6 +378,13 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         finally:
             await runner.cleanup()
         logger.info("Exiting fallback GUI")
+        remaining_threads = ""
+        for thread in threading.enumerate():
+            if thread.name != "MainThread" and not thread.name.startswith("asyncio_"):
+                remaining_threads += f"\t{thread.name}\n"
+        if remaining_threads:
+            remaining_threads = "Waiting on remaining threads:\n" + remaining_threads
+            logger.warning(remaining_threads)
     except Exception as e:
         logger.error(f"Could not start fallback GUI: {e}")
 
@@ -386,6 +425,21 @@ def _start_gui_private(
     )
     if not window:
         logger.error("Failed to create webview window.")
+
+    def subscribe_game_version():
+        def on_game_version_change(tag, digest):
+            game_version = tag if tag is not None else "Unknown"
+            game_version_digest = digest if digest is not None else ""
+            if window is None:
+                state["game_version"] = game_version
+                state["game_version_digest"] = game_version_digest
+                send_eval("requestStateUpdate();")
+            else:
+                window.state.game_version = game_version
+                window.state.game_version_digest = game_version_digest
+
+        subscribe_game_version_change(on_game_version_change)
+
     if window:
         window.state.opts = extra_options_str
         window.state.branch = branch
@@ -396,13 +450,7 @@ def _start_gui_private(
         window.events.loaded += lambda: on_loaded(window)
 
         # then subscribe
-        def on_game_version_change(tag, digest):
-            if window is None:
-                return
-            window.state.game_version = tag if tag is not None else "Unknown"
-            window.state.game_version_digest = digest if digest is not None else ""
-
-        subscribe_game_version_change(on_game_version_change)
+        subscribe_game_version()
 
         try:
             webview.start(icon=str(entry_parent / "favicon.ico"), debug=DEV_INSTANCE)
@@ -410,5 +458,7 @@ def _start_gui_private(
             logger.error("Failed to start webview window.")
             logger.error(traceback.format_exc())
             window = None
+    else:
+        subscribe_game_version()
     if not window:
         fallback_gui_main(entry, extra_options_str, branch)
