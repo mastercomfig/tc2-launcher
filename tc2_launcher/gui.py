@@ -279,7 +279,7 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         async def state_handler(r: aiohttp.web.Request):
             update = await r.text()
             if not update:
-                on_loaded(None)
+                on_loaded()
             return aiohttp.web.json_response(state)
 
         app.add_routes([aiohttp.web.post("/api/state", state_handler)])
