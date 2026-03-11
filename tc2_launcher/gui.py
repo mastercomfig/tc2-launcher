@@ -172,8 +172,6 @@ has_init = False
 
 def on_loaded():
     global has_init
-    if using_fallback:
-        return
     global queue_thread
     if current_queue is not None and queue_thread is None:
         queue_thread = threading.Thread(target=check_queue)
