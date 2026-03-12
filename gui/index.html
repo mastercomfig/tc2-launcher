@@ -70,6 +70,14 @@
             width: 100%;
         }
 
+        #game-menu {
+            display: flex;
+            justify-content: end;
+            align-items: stretch;
+            gap: 0.25rem;
+            width: 100%;
+        }
+
         .logo {
             width: min(70vw, 400px);
             height: auto;
@@ -104,6 +112,25 @@
         .btn-lg {
             font-size: 1.25rem;
             padding: 0.75rem 1.5rem;
+        }
+
+        .btn-xl {
+            font-size: 1.25rem;
+            padding: 0.75rem 2rem;
+            text-transform: uppercase;
+            font-weight: 900;
+        }
+
+        .icon {
+            display: inline-block;
+            vertical-align: text-top;
+            width: 24px;
+            height: 24px;
+            padding-top: 3px;
+        }
+
+        .icon>svg {
+            vertical-align: text-top;
         }
 
         .spacer {
@@ -167,9 +194,10 @@
         </div>
         <div id="launch-bar">
             <div class="spacer"></div>
-            <div class="game-menu">
+            <div id="game-menu">
                 <span class="info-label show-offline" style="display: none">Offline mode</span>
-                <button id="launch-btn" class="btn btn-primary btn-lg" disabled>Updating...</button>
+                <button id="launch-btn" class="btn btn-primary btn-xl" disabled><span id="launch-btn-icon"
+                        class="icon"></span>&nbsp;<span id="launch-btn-text">Updating...</span></button>
                 <button id="update-btn" class="btn btn-secondary btn-lg" title="Check for updates" disabled>
                     <svg width="24" height="20" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path
@@ -242,8 +270,52 @@
             }
         }
 
+        const ICON_UPDATE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4.56079 10.6418L6.35394 3.94971L8.25402 5.84979C11.7312 3.6588 16.3814 4.07764 19.41 7.1063L17.9958 8.52052C15.7536 6.27827 12.3686 5.87519 9.71551 7.31128L11.2529 8.84869L4.56079 10.6418Z" fill="currentColor" />
+                            <path d="M19.4392 13.3581L17.646 20.0502L15.7459 18.1501C12.2688 20.3411 7.61857 19.9223 4.58991 16.8936L6.00413 15.4794C8.24638 17.7217 11.6313 18.1247 14.2844 16.6887L12.747 15.1512L19.4392 13.3581Z" fill="currentColor" />
+                        </svg>`;
+        const ICON_LOAD = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8 12C8 13.1046 7.10457 14 6 14C4.89543 14 4 13.1046 4 12C4 10.8954 4.89543 10 6 10C7.10457 10 8 10.8954 8 12Z" fill="currentColor" />
+                            <path d="M14 12C14 13.1046 13.1046 14 12 14C10.8954 14 10 13.1046 10 12C10 10.8954 10.8954 10 12 10C13.1046 10 14 10.8954 14 12Z" fill="currentColor" />
+                            <path d="M18 14C19.1046 14 20 13.1046 20 12C20 10.8954 19.1046 10 18 10C16.8954 10 16 10.8954 16 12C16 13.1046 16.8954 14 18 14Z" fill="currentColor" />
+                        </svg>`;
+        const ICON_RUNNING = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd" clip-rule="evenodd" d="M2 20V4H22V20H2ZM20 6H6V16L20 16V6Z" fill="currentColor" />
+                        </svg>`;
+        const ICON_LAUNCH = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M14 13.9633H16V7.96331H10V9.96331H12.5858L7.25623 15.2929L8.67044 16.7071L14 11.3775V13.9633Z"
+                                fill="currentColor" />
+                            <path fill-rule="evenodd" clip-rule="evenodd"
+                                d="M23 19C23 21.2091 21.2091 23 19 23H5C2.79086 23 1 21.2091 1 19V5C1 2.79086 2.79086 1 5 1H19C21.2091 1 23 2.79086 23 5V19ZM19 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3H19C20.1046 3 21 3.89543 21 5V19C21 20.1046 20.1046 21 19 21Z"
+                                fill="currentColor" />
+                        </svg>`;
+        const ICON_FAIL = `<svg width="24" height="20" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8.46457 14.1213C8.07404 14.5118 8.07404 15.145 8.46457 15.5355C8.85509 15.926 9.48825 15.926 9.87878 15.5355L15.5356 9.87862C15.9262 9.4881 15.9262 8.85493 15.5356 8.46441C15.1451 8.07388 14.5119 8.07388 14.1214 8.46441L8.46457 14.1213Z" fill="currentColor" />
+                            <path fill-rule="evenodd" clip-rule="evenodd" d="M6.34315 17.6569C9.46734 20.781 14.5327 20.781 17.6569 17.6569C20.781 14.5327 20.781 9.46734 17.6569 6.34315C14.5327 3.21895 9.46734 3.21895 6.34315 6.34315C3.21895 9.46734 3.21895 14.5327 6.34315 17.6569ZM16.2426 16.2426C13.8995 18.5858 10.1005 18.5858 7.75736 16.2426C5.41421 13.8995 5.41421 10.1005 7.75736 7.75736C10.1005 5.41421 13.8995 5.41421 16.2426 7.75736C18.5858 10.1005 18.5858 13.8995 16.2426 16.2426Z" fill="currentColor" />
+                        </svg>`;
+
+        function getLaunchBtnIcon() {
+            if (launchState === -1) {
+                return ICON_LOAD;
+            }
+            if (launchState === 1) {
+                return ICON_LOAD;
+            }
+            if (launchState === 2) {
+                return ICON_RUNNING;
+            }
+            if (available) {
+                return ICON_LAUNCH;
+            } else {
+                return ICON_FAIL;
+            }
+        }
+
         function updateLaunchBtnText() {
-            document.getElementById("launch-btn").innerText = getLaunchBtnText();
+            document.getElementById("launch-btn-text").innerText = getLaunchBtnText();
+            document.getElementById("launch-btn-icon").innerHTML = getLaunchBtnIcon();
         }
 
         function updateLaunchBtnDisabled() {
