@@ -1265,6 +1265,19 @@ socks = ["pysocks (>=1.5.6,!=1.5.7,<2.0)"]
 zstd = ["backports-zstd (>=1.0.0) ; python_version < \"3.14\""]
 
 [[package]]
+name = "vdf"
+version = "3.4"
+description = "Library for working with Valve's VDF text format"
+optional = false
+python-versions = "*"
+groups = ["main"]
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
+files = [
+    {file = "vdf-3.4-py2.py3-none-any.whl", hash = "sha256:68c1a125cc49e343d535af2dd25074e9cb0908c6607f073947c4a04bbe234534"},
+    {file = "vdf-3.4.tar.gz", hash = "sha256:fd5419f41e07a1009e5ffd027c7dcbe43d1f7e8ef453aeaa90d9d04b807de2af"},
+]
+
+[[package]]
 name = "wheel"
 version = "0.45.1"
 description = "A built-package format for Python"
@@ -1429,4 +1442,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "9fdc6f853c31d325fb65fff790c795c6c7088feb2f943ce830eb56a5698513b0"
+content-hash = "cabef5e9a8c9c6b93ac1213d55a71df13790250b10937a094278b16f0968a8e8"

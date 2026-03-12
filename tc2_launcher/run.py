@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import webbrowser
+import winreg
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -18,9 +19,10 @@ from typing import Callable
 
 import psutil
 import requests
+import vdf
 
 from tc2_launcher import logger
-from tc2_launcher.utils import DEV_INSTANCE
+from tc2_launcher.utils import DEV_INSTANCE, VERSION_STR
 
 TC2_REPO = "mastercomfig/tc2"
 LAUNCHER_REPO = "mastercomfig/tc2-launcher"
@@ -108,7 +110,7 @@ def _find_asset(release: dict, asset_filter: str) -> tuple[str, str, str] | None
     return None
 
 
-def update_self(current_version: str) -> bool:
+def update_self() -> bool:
     try:
         release = _get_latest_release(None, LAUNCHER_REPO)
         tag = release.get("tag_name", "").lstrip("v")
@@ -116,10 +118,10 @@ def update_self(current_version: str) -> bool:
         logger.error(f"Failed to get self-update info: {e}")
         return False
 
-    if tag == current_version:
+    if tag == VERSION_STR:
         return False
 
-    logger.info(f"Self-update available: {current_version} -> {tag}")
+    logger.info(f"Self-update available: {VERSION_STR} -> {tag}")
 
     if os.name == "nt":
         asset_filter = ".exe"
@@ -398,9 +400,63 @@ def update_archive(
     return 0
 
 
+def get_steam_libraries() -> dict[int, tuple[Path, Path]]:
+    if os.name == "nt":
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Valve\Steam")
+        steam_path_str, _ = winreg.QueryValueEx(key, "SteamPath")
+        steam_path = Path(steam_path_str)
+        winreg.CloseKey(key)
+    else:
+        steam_path = Path.home() / ".steam" / "steam"
+    library_folders = steam_path / "config" / "libraryfolders.vdf"
+    with library_folders.open("r", encoding="utf-8") as f:
+        data = vdf.load(f)
+    library_data = {}
+    for library in data["libraryfolders"].values():
+        path = Path(library["path"])
+        dirs = [
+            d for d in path.iterdir() if d.is_dir() and d.name.lower() == "steamapps"
+        ]
+        dirs = list(sorted(dirs, key=lambda x: x.name, reverse=True))
+        steamapps = dirs[0]
+        for app in library["apps"].keys():
+            library_data[int(app)] = steamapps
+    return library_data
+
+
+def get_steam_app(app_id: int) -> Path | None:
+    libraries = get_steam_libraries()
+    steamapps_path = libraries.get(app_id)
+    if steamapps_path is None:
+        return None
+    appmanifest = steamapps_path / f"appmanifest_{app_id}.acf"
+    with appmanifest.open("r", encoding="utf-8") as f:
+        data = vdf.load(f)
+    app_data = data["AppState"]
+    install_dir = steamapps_path / "common" / app_data["installdir"]
+    return install_dir
+
+
+SLR3_APPID = 1628350
+
+
+def get_slr3_path() -> Path | None:
+    slr3_dir = get_steam_app(SLR3_APPID)
+    if slr3_dir is None:
+        return None
+    return slr3_dir / "run"
+
+
+SLR3_ENV_NAME = "SLR_SNIPER_PATH"
+
+
 def get_safe_env() -> dict:
     new_env = os.environ.copy()
     if os.name == "posix":
+        if SLR3_ENV_NAME not in new_env:
+            slr3_path = get_slr3_path()
+            if slr3_path is not None:
+                new_env[SLR3_ENV_NAME] = str(slr3_path)
         if "LD_LIBRARY_PATH_ORIG" in new_env:
             new_env["LD_LIBRARY_PATH"] = new_env["LD_LIBRARY_PATH_ORIG"]
         elif "LD_LIBRARY_PATH" in new_env:

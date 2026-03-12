@@ -28,14 +28,14 @@ from tc2_launcher.run import (
     wait_game_exit,
     wait_game_running,
 )
-from tc2_launcher.utils import DEV_INSTANCE, VERSION
+from tc2_launcher.utils import DEV_INSTANCE, VERSION_STR
 
 using_fallback = False
 
 state = {
     "opts": None,
     "branch": None,
-    "version": VERSION,
+    "version": VERSION_STR,
     "game_version": "",
     "game_version_digest": "",
 }
@@ -454,7 +454,7 @@ def _start_gui_private(
     if window:
         window.state.opts = extra_options_str
         window.state.branch = branch
-        window.state.version = VERSION
+        window.state.version = VERSION_STR
         # state needs empty init
         window.state.game_version = ""
         window.state.game_version_digest = ""
