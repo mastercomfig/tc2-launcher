@@ -8,7 +8,12 @@ import sys
 import tempfile
 import threading
 import webbrowser
-import winreg
+
+try:
+    import winreg
+except ImportError:
+    winreg = None
+
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
