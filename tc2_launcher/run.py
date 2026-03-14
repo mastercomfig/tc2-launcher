@@ -419,6 +419,8 @@ def get_steam_libraries() -> dict[int, tuple[Path, Path]]:
     library_data = {}
     for library in data["libraryfolders"].values():
         path = Path(library["path"])
+        if not path.exists() or not path.is_dir():
+            continue
         dirs = [
             d for d in path.iterdir() if d.is_dir() and d.name.lower() == "steamapps"
         ]
