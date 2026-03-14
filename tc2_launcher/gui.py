@@ -86,15 +86,18 @@ class Api:
         else:
             options = None
         set_launch_options(extra_options=options)
+        opts_str = " ".join(options) if options else ""
         if using_fallback:
-            state["opts"] = options
+            state["opts"] = opts_str
             send_eval("requestStateUpdate();")
         else:
-            get_window().state.opts = options
+            get_window().state.opts = opts_str
 
     def set_prerelease(self, prerelease: str):
         if isinstance(prerelease, str):
             set_prerelease(prerelease=prerelease)
+        else:
+            prerelease = ""
         if using_fallback:
             state["branch"] = prerelease
             send_eval("requestStateUpdate();")
