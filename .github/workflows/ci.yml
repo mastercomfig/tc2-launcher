@@ -96,4 +96,7 @@ jobs:
       - run: 'find windows-assets -type f | xargs -I{} mv {} dist'
       - run: 'find linux-assets -type f | xargs -I{} mv {} dist'
       - run: ./script/tag.sh
+        if: ${{ github.repository_owner == 'mastercomfig' }}
+        env:
+          GH_TOKEN: ${{secrets.REPO_TOKEN}}
     
