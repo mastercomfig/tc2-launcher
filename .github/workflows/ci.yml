@@ -80,6 +80,7 @@ jobs:
       - build-windows
       - build-linux
     if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
         with:
