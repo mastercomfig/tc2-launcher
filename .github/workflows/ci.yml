@@ -1,8 +1,46 @@
 name: CI
 
-on: [push]
+on:
+  push:
+    branches:
+      - '*'
+    tags:
+      - '*'
+
 
 jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - name: Cache dependencies
+        id: cache-deps
+        uses: actions/cache@v5
+        with:
+          path: .venv
+          key: pydeps-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+      - name: Install dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          C:\Users\runneradmin\.local\bin\poetry install --no-interaction --no-root
+      - name: Install project
+        run: C:\Users\runneradmin\.local\bin\poetry install --no-interaction
+      - name: Build project
+        run: |
+          C:\Users\runneradmin\.local\bin\poetry run .\build.bat
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: TC2Launcher
+          path: dist/TC2Launcher.exe
   build-linux:
     runs-on: ubuntu-latest
     steps:
@@ -33,39 +71,27 @@ jobs:
         run: |
           poetry run ./build.sh
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: TC2Launcher-linux
           path: dist/TC2Launcher-linux
-  build-windows:
-    runs-on: windows-latest
+  release:
+    needs:
+      - build-windows
+      - build-linux
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     steps:
-      - uses: actions/checkout@v6
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-      - uses: snok/install-poetry@v1
-        with:
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-      - name: Cache dependencies
-        id: cache-deps
-        uses: actions/cache@v5
-        with:
-          path: .venv
-          key: pydeps-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-      - name: Install dependencies
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          C:\Users\runneradmin\.local\bin\poetry install --no-interaction --no-root
-      - name: Install project
-        run: C:\Users\runneradmin\.local\bin\poetry install --no-interaction
-      - name: Build project
-        run: |
-          C:\Users\runneradmin\.local\bin\poetry run .\build.bat
-      - name: Upload artifact
-        uses: actions/upload-artifact@v6
+      - uses: actions/download-artifact@v8
         with:
           name: TC2Launcher
-          path: dist/TC2Launcher.exe
+          path: windows-assets
+      - uses: actions/download-artifact@v8
+        with:
+          name: TC2Launcher-linux
+          path: linux-assets
+      - run: mkdir -p dist
+      - run: rm -f dist/*
+      - run: 'find windows-assets -type f | xargs -I{} mv {} dist'
+      - run: 'find linux-assets -type f | xargs -I{} mv {} dist'
+      - run: ./script/tag.sh
+    
