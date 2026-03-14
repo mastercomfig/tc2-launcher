@@ -15,7 +15,7 @@ gh release create ${VERSION} \
     "dist/*" \
     --title "${VERSION}" \
     -F "notes.txt" \
-    --prerelease \
+    --draft \
     --verify-tag \
     --fail-on-no-commits
 rm notes.txt
