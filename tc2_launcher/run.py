@@ -458,6 +458,14 @@ SLR3_ENV_NAME = "SLR_SNIPER_PATH"
 def get_safe_env() -> dict:
     new_env = os.environ.copy()
     if os.name == "posix":
+        did_warn_manual_vk = False
+        for var in ["VK_ICD_FILENAMES", "VK_DRIVER_FILES", "VK_ADD_DRIVER_FILES"]:
+            if new_env.pop(var, None) and not did_warn_manual_vk:
+                logger.warning(
+                    "Manually set VK_ICD_FILENAMES, VK_DRIVER_FILES, or "
+                    "VK_ADD_DRIVER_FILES is not supported, ignoring."
+                )
+                did_warn_manual_vk = True
         if SLR3_ENV_NAME not in new_env:
             slr3_path = get_slr3_path()
             if slr3_path is not None:
