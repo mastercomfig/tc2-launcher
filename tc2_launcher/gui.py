@@ -411,6 +411,7 @@ def _start_gui_private(
 ):
     global current_entry
     global current_queue
+    global using_fallback
 
     extra_options = get_launch_options()
     extra_options_str = " ".join(extra_options)
@@ -422,7 +423,6 @@ def _start_gui_private(
     current_entry = entry_name
     current_queue = queue
 
-    window = None
     supported_os = os.name == "nt"
     if supported_os:
         width = 800
@@ -447,12 +447,15 @@ def _start_gui_private(
 
         if not window:
             logger.error("Failed to create webview window.")
+    else:
+        window = None
+        using_fallback = True
 
     def subscribe_game_version():
         def on_game_version_change(tag, digest):
             game_version = tag if tag is not None else ""
             game_version_digest = digest if digest is not None else ""
-            if using_fallback or not window:
+            if using_fallback:
                 state["game_version"] = game_version
                 state["game_version_digest"] = game_version_digest
                 send_eval("requestStateUpdate();")
@@ -481,6 +484,7 @@ def _start_gui_private(
             logger.error(traceback.format_exc())
             window = None
     else:
+        using_fallback = True
         subscribe_game_version()
     if not window:
         fallback_gui_main(entry, extra_options_str, branch)
