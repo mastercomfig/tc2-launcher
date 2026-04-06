@@ -476,18 +476,40 @@ def get_safe_env() -> dict:
                 new_env["LD_LIBRARY_PATH"] = lp_orig
             else:
                 new_env.pop("LD_LIBRARY_PATH", None)
-    elif os.name == "nt":
-        if not DEV_INSTANCE and hasattr(sys, "_MEIPASS"):
-            meipass = getattr(sys, "_MEIPASS", "")
-            if meipass:
-                paths = new_env.get("PATH", "").split(os.pathsep)
-                paths = [
-                    p
-                    for p in paths
-                    if p
-                    and not Path(p).resolve().is_relative_to(Path(meipass).resolve())
-                ]
-                new_env["PATH"] = os.pathsep.join(paths)
+    if not DEV_INSTANCE:
+        meipass = getattr(sys, "_MEIPASS", "")
+        if meipass:
+            try:
+                meipass_path = Path(meipass).resolve()
+                meipass_lower = str(meipass).lower()
+                for key, value in list(new_env.items()):
+                    if not value:
+                        continue
+                    if meipass_lower not in value.lower():
+                        continue
+
+                    paths = value.split(os.pathsep)
+                    new_paths = []
+                    changed = False
+                    for p in paths:
+                        if not p:
+                            continue
+                        try:
+                            if Path(p).resolve().is_relative_to(meipass_path):
+                                changed = True
+                                continue
+                        except Exception:
+                            pass
+                        new_paths.append(p)
+
+                    if changed:
+                        if not new_paths:
+                            new_env.pop(key, None)
+                        else:
+                            new_env[key] = os.pathsep.join(new_paths)
+            except Exception as e:
+                logger.error(f"Failed to sanitize environment variables: {e}")
+
     return new_env
 
 
