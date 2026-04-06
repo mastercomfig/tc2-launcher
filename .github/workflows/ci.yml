@@ -91,13 +91,8 @@ jobs:
         with:
           name: TC2Launcher-linux
           path: linux-assets
-      - run: ls
-      - run: ls linux-assets
-      - run: ls windows-assets
       - run: mkdir -p dist
       - run: rm -f dist/*
-      - run: find windows-assets -type f
-      - run: find linux-assets -type f
       - run: 'find windows-assets -type f | xargs -I{} mv {} dist'
       - run: 'find linux-assets -type f | xargs -I{} mv {} dist'
       - run: ./script/tag.sh

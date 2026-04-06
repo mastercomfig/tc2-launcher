@@ -6,6 +6,8 @@ cd "${BIN_DIR}" || exit 2
 
 set -e
 
+cd ..
+
 git fetch --tags origin
 
 VERSION=$(git describe --tags)
