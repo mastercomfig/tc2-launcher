@@ -853,9 +853,20 @@ def change_install_folder(new_game_dir: Path):
     write_settings(dest=None, settings=settings)
 
 
-def uninstall_launcher(dest: Path | None = None) -> bool:
+def uninstall(reset_settings: bool, dest: Path | None = None) -> bool:
     if not dest:
         dest = default_dest_dir()
+
+    game_dir = get_game_dir(dest)
+    if game_dir.exists() and game_dir.is_dir():
+        try:
+            rmtree(game_dir)
+        except Exception as e:
+            logger.error(f"Failed to uninstall game directory: {e}")
+            return False
+
+    if not reset_settings:
+        return True
 
     # make sure it's not already uninstalled
     if not dest.exists() or not dest.is_dir():
