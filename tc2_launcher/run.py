@@ -690,6 +690,7 @@ def launch_game(
                 use_noborder = False
         if use_noborder:
             default_args += ["-sw", "-noborder"]
+        default_args += ["-vulkan"]
     cmd = [str(exe_path)] + default_args + extra_options + default_cmds
 
     # Launch the game
