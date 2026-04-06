@@ -378,8 +378,16 @@
         }
 
         function archiveReady(inErrCode) {
+            lastUpdateCheck = Date.now();
             setErrCode(inErrCode);
-            setLaunchState(0);
+            const shouldLaunch = launchPending && available;
+            launchPending = false;
+            if (shouldLaunch) {
+                api.launch_game();
+                setLaunchState(1);
+            } else {
+                setLaunchState(0);
+            }
         }
 
         async function queryWebApi(func, args) {
@@ -453,12 +461,41 @@
 
         const api = new API();
 
+        let launchPending = false;
+        let lastUpdateCheck = 0;
+        const CHECK_COOLDOWN = 5 * 60 * 1000; // 5 minutes
+
+        function checkUpdates(force = false, isLaunch = false) {
+            if (launchState !== 0) return;
+            const now = Date.now();
+            if (force || (now - lastUpdateCheck > CHECK_COOLDOWN)) {
+                lastUpdateCheck = now;
+                if (isLaunch) {
+                    launchPending = true;
+                    setLaunchState(1);
+                } else {
+                    setLaunchState(-1);
+                }
+                api.check_for_updates();
+            } else {
+                if (isLaunch) {
+                    api.launch_game();
+                    setLaunchState(1);
+                }
+            }
+        }
+
+        setInterval(() => checkUpdates(false, false), 15 * 60 * 1000);
+        window.addEventListener("focus", () => checkUpdates(false, false));
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") checkUpdates(false, false);
+        });
+
         document.getElementById("launch-btn").addEventListener("click", () => {
             if (document.getElementById("launch-btn").disabled) {
                 return;
             }
-            api.launch_game();
-            setLaunchState(1);
+            checkUpdates(true, true);
         });
         document.getElementById("settings-btn").addEventListener("click", () => {
             if (document.getElementById("settings-btn").disabled) {
@@ -490,8 +527,7 @@
             if (document.getElementById("update-btn").disabled) {
                 return;
             }
-            setLaunchState(-1);
-            api.check_for_updates();
+            checkUpdates(true, false);
         });
         document.getElementById("prerelease").addEventListener("change", (event) => {
             if (event.target.checked) {
