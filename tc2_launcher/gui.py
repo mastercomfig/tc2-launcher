@@ -452,7 +452,7 @@ def _start_gui_private(
         def on_game_version_change(tag, digest):
             game_version = tag if tag is not None else ""
             game_version_digest = digest if digest is not None else ""
-            if using_fallback:
+            if using_fallback or not window:
                 state["game_version"] = game_version
                 state["game_version_digest"] = game_version_digest
                 send_eval("requestStateUpdate();")
