@@ -1,0 +1,21 @@
+name: Start Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version"
+        required: true
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.REPO_TOKEN }}
+          fetch-depth: 0
+      - name: Tag release
+        run: git tag ${{ github.event.inputs.version }}
+      - name: Push release
+        run: git push origin ${{ github.event.inputs.version }}
