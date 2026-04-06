@@ -833,6 +833,9 @@ def change_install_folder(new_game_dir: Path):
         new_game_dir.mkdir(parents=True, exist_ok=True)
         if not new_game_dir.exists() or not new_game_dir.is_dir():
             raise Exception("Failed to create directory")
+        test_path = new_game_dir / "test.txt"
+        test_path.touch()
+        test_path.unlink()
     except Exception as e:
         logger.error(f"Invalid path '{new_game_dir}': {e}")
         return
@@ -840,7 +843,7 @@ def change_install_folder(new_game_dir: Path):
     old_game_dir = get_game_dir()
     if new_game_dir == old_game_dir:
         return
-    if old_game_dir.exists():
+    if old_game_dir.exists() and old_game_dir.is_dir():
         try:
             copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
             rmtree(old_game_dir)
