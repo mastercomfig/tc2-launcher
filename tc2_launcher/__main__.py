@@ -187,7 +187,9 @@ def main():
         set_launch_options(dest=dest, extra_options=args.opts)
 
     if args.launch:
-        launch_game(dest=dest, extra_options=args.opts)
+        err, should_print = launch_game(dest=dest, extra_options=args.opts)
+        if err and should_print:
+            logger.error(err)
 
 
 if __name__ == "__main__":

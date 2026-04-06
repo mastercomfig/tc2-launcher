@@ -178,6 +178,34 @@
             margin-left: 1rem;
             vertical-align: top;
         }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+        }
+
+        .modal-content {
+            background-color: rgb(33, 33, 33);
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid rgb(97, 97, 97);
+            width: 80%;
+            max-width: 600px;
+            color: rgb(222, 226, 230);
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.5);
+        }
+
+        .modal-body {
+            white-space: pre-wrap;
+            margin-bottom: 2rem;
+            line-height: 1.5;
+        }
     </style>
 </head>
 
@@ -246,6 +274,17 @@
             </p>
         </div>
     </div>
+    
+    <div id="error-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="error-modal-title" style="margin-top: 0; color: #ff5252;">Error</h2>
+            <div id="error-modal-body" class="modal-body"></div>
+            <div style="text-align: right;">
+                <button class="btn btn-secondary" onclick="document.getElementById('error-modal').style.display='none'">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let launchState = -1;
         let errCode = 0;
@@ -268,6 +307,12 @@
             } else {
                 return "Install failed";
             }
+        }
+
+        function showErrorModal(title, text) {
+            document.getElementById("error-modal-title").innerText = title;
+            document.getElementById("error-modal-body").innerText = text;
+            document.getElementById("error-modal").style.display = "block";
         }
 
         const ICON_UPDATE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

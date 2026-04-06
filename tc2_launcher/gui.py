@@ -1,4 +1,5 @@
 import asyncio
+import json
 import multiprocessing
 import os
 import sys
@@ -77,8 +78,12 @@ def get_entrypoint():
 
 class Api:
     def launch_game(self):
-        launch_game()
-        check_launch_game()
+        err, _ = launch_game()
+        if err:
+            send_eval(f"showErrorModal('Error', {json.dumps(err)});")
+            send_eval("setLaunchState(0);")
+        else:
+            check_launch_game()
 
     def set_launch_options(self, options):
         if options and isinstance(options, str):

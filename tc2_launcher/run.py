@@ -28,6 +28,7 @@ import requests
 import vdf
 
 from tc2_launcher import logger
+from tc2_launcher.hardware import INTEL_VENDOR_ID, get_vulkan_info
 from tc2_launcher.utils import DEV_INSTANCE, VERSION_STR
 
 TC2_REPO = "mastercomfig/tc2"
@@ -654,14 +655,14 @@ def _get_game_exe(dest: Path | None) -> Path | None:
 def launch_game(
     dest: Path | None = None,
     extra_options: list[str] | None = None,
-) -> None:
+) -> tuple[str, bool] | tuple[None, bool]:
     if not dest:
         dest = default_dest_dir()
 
     exe_path = _get_game_exe(dest)
     if not exe_path:
         logger.error(f"Could not locate game executable '{exe_path}'")
-        return
+        return f"Could not locate game executable '{exe_path}'", False
 
     # Resolve options with persistence
     settings = read_settings(dest)
@@ -681,9 +682,29 @@ def launch_game(
         extra_options = settings.get("opts")
     if not extra_options or not isinstance(extra_options, list):
         extra_options = []
+    supported, gpu_info = get_vulkan_info()
+    if not supported:
+        error_text = (
+            "Your graphics card falls below our official minimum specs.\n\n"
+            "In previous versions, this spec was recommended for minor graphical\n"
+            "improvements using these hardware capabilities. However,\n"
+            "Team Comtress 2 now relies heavily on graphics features such as \n"
+            "Shader Model 3.0 and so adherence to the prior recommended spec\n"
+            "is now the minimum requirement.\n\n"
+            "Unfortunately this means that Team Comtress 2 will not be able to\n"
+            "run on some graphics cards from 2006 or before.\n"
+        )
+        logger.error("GPU minimum requirements not met.")
+        return error_text, True
+
+    if gpu_info and gpu_info["vendor_id"] == INTEL_VENDOR_ID:
+        default_args += ["-force_vendor_id", "0x10DE", "-force_device_id", "0x1180"]
+
+    extra_options_set = set(extra_options)
+    banned_opts = []
+
     if os.name == "nt":
         noborder_check_opts = ["-sw", "-windowed", "-noborder", "-full", "-fullscreen"]
-        extra_options_set = set(extra_options)
         use_noborder = True
         for opt in noborder_check_opts:
             if opt in extra_options_set:
@@ -691,6 +712,20 @@ def launch_game(
         if use_noborder:
             default_args += ["-sw", "-noborder"]
         default_args += ["-vulkan"]
+    else:
+        # force no OpenGL
+        banned_opts += ["-gl"]
+
+    banned_opts_set = set(banned_opts)
+    has_banned_opts = False
+    for opt in banned_opts:
+        if opt in extra_options_set:
+            has_banned_opts = True
+            break
+
+    if has_banned_opts:
+        extra_options = [x for x in extra_options if x not in banned_opts_set]
+
     cmd = [str(exe_path)] + default_args + extra_options + default_cmds
 
     # Launch the game
@@ -706,6 +741,8 @@ def launch_game(
         run_non_blocking(cmd, cwd=exe_path.parent, env=env)
     except Exception as e:
         logger.error(f"Failed to launch game: {e}")
+
+    return None, False
 
 
 wait_game_exit_thread = None
