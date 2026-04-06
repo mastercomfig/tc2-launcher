@@ -1,5 +1,6 @@
 import argparse
 import multiprocessing
+import os
 import queue
 import sys
 import threading
@@ -24,6 +25,12 @@ from tc2_launcher.utils import DEV_INSTANCE, VERSION_STR
 updater_thread_queue: Optional[queue.Queue] = None
 should_launch_updater = True
 use_updater_gui = False
+
+# clear out custom search path
+if sys.platform == "win32" and not DEV_INSTANCE:
+    import ctypes
+
+    ctypes.windll.kernel32.SetDllDirectoryW(None)
 
 
 def updater_thread():
@@ -186,4 +193,8 @@ def main():
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
     multiprocessing.freeze_support()
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
     main()

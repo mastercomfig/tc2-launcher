@@ -116,10 +116,7 @@ class Api:
             if path is None:
                 if using_fallback:
                     return
-                window = get_window()
-                if not window:
-                    return
-                result = window.create_file_dialog(webview.FileDialog.FOLDER)
+                result = get_window().create_file_dialog(webview.FileDialog.FOLDER)
                 if not result:
                     return
                 path = result[0]
@@ -414,31 +411,42 @@ def _start_gui_private(
 ):
     global current_entry
     global current_queue
+
     extra_options = get_launch_options()
     extra_options_str = " ".join(extra_options)
+
     branch = get_prerelease()
+
     entry = str(entry_parent / f"{entry_name}.html")
+
     current_entry = entry_name
     current_queue = queue
-    width = 800
-    height = 600
-    min_size = (640, 360)
-    if entry_name == "update":
-        width = 400
-        height = 533
-        min_size = (400, 533)
-    window = webview.create_window(
-        "Team Comtress Launcher",
-        entry,
-        js_api=Api(),
-        min_size=min_size,
-        width=width,
-        height=height,
-        background_color="#212121",
-        **kwargs,
-    )
-    if not window:
-        logger.error("Failed to create webview window.")
+
+    window = None
+    supported_os = os.name == "nt"
+    if supported_os:
+        width = 800
+        height = 600
+        min_size = (640, 360)
+
+        if entry_name == "update":
+            width = 400
+            height = 533
+            min_size = (400, 533)
+
+        window = webview.create_window(
+            "Team Comtress Launcher",
+            entry,
+            js_api=Api(),
+            min_size=min_size,
+            width=width,
+            height=height,
+            background_color="#212121",
+            **kwargs,
+        )
+
+        if not window:
+            logger.error("Failed to create webview window.")
 
     def subscribe_game_version():
         def on_game_version_change(tag, digest):

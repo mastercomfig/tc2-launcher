@@ -1,13 +1,14 @@
 import hashlib
-import importlib.util
 import json
 import os
-import stat
 import subprocess
 import sys
 import tempfile
 import threading
 import webbrowser
+
+if os.name == "posix":
+    import stat
 
 try:
     import winreg
@@ -34,10 +35,7 @@ LAUNCHER_REPO = "mastercomfig/tc2-launcher"
 
 
 def default_dest_dir() -> Path:
-    if sys.platform == "darwin":
-        env = "XDG_DATA_HOME"
-        fallback = Path.home() / "Library" / "Application Support"
-    elif os.name == "posix":
+    if os.name == "posix":
         env = "XDG_DATA_HOME"
         fallback = Path.home() / ".local" / "share"
     else:
@@ -132,8 +130,6 @@ def update_self() -> bool:
         asset_filter = ".exe"
     else:
         asset_filter = "-linux"
-        if importlib.util.find_spec("qtpy") is not None:
-            asset_filter += "-qt"
     asset = _find_asset(release, asset_filter)
     if not asset:
         logger.error(
@@ -160,7 +156,8 @@ def update_self() -> bool:
         if os.name == "posix":
             download_path.chmod(download_path.stat().st_mode | stat.S_IEXEC)
         run_non_blocking(
-            [str(download_path), "--replace", str(current_path)] + filtered_args
+            [str(download_path), "--replace", str(current_path)] + filtered_args,
+            env={"PYINSTALLER_RESET_ENVIRONMENT": "1"},
         )
         return True
     except Exception as e:
@@ -464,10 +461,12 @@ def get_safe_env() -> dict:
             slr3_path = get_slr3_path()
             if slr3_path is not None:
                 new_env[SLR3_ENV_NAME] = str(slr3_path)
-        if "LD_LIBRARY_PATH_ORIG" in new_env:
-            new_env["LD_LIBRARY_PATH"] = new_env["LD_LIBRARY_PATH_ORIG"]
-        elif "LD_LIBRARY_PATH" in new_env:
-            del new_env["LD_LIBRARY_PATH"]
+        if not DEV_INSTANCE:
+            lp_orig = new_env.get("LD_LIBRARY_PATH_ORIG")
+            if lp_orig is not None:
+                new_env["LD_LIBRARY_PATH"] = lp_orig
+            else:
+                new_env.pop("LD_LIBRARY_PATH", None)
     elif os.name == "nt":
         if not DEV_INSTANCE and hasattr(sys, "_MEIPASS"):
             meipass = getattr(sys, "_MEIPASS", "")
@@ -477,7 +476,7 @@ def get_safe_env() -> dict:
                     p
                     for p in paths
                     if p
-                    and os.path.normpath(p).lower() != os.path.normpath(meipass).lower()
+                    and not Path(p).resolve().is_relative_to(Path(meipass).resolve())
                 ]
                 new_env["PATH"] = os.pathsep.join(paths)
     return new_env
@@ -503,39 +502,95 @@ def restore_system_env():
             os.environ.pop("LD_LIBRARY_PATH", None)
 
 
+def get_desktop_environment() -> str | None:
+    if os.name != "posix":
+        return None
+    xdg_desktop = os.getenv("XDG_CURRENT_DESKTOP", "").split(":")
+    if "GNOME" in xdg_desktop or "GNOME_DESKTOP_SESSION_ID" in os.environ:
+        return "gnome"
+    if "KDE" in xdg_desktop or "KDE_FULL_SESSION" in os.environ:
+        return "kde"
+    return None
+
+
 def run_open(url: str):
     if os.name == "nt":
-        webbrowser.open(url)
+        browser_protocols = ["http://", "https://", "ftp://", "file://"]
+        if any(url.startswith(p) for p in browser_protocols):
+            webbrowser.open(url)
+        else:
+            os.startfile(url)
     else:
         with restore_system_env():
-            webbrowser.open(url)
+            args = []
+            desktop_env = get_desktop_environment()
+            import shutil
+
+            # this is a bit non-ideal, since it's mostly a copy of webbrowser.open()
+            if desktop_env == "kde":
+                for cmd in [
+                    "kioclient5",
+                    "kioclient",
+                    "kde-open6",
+                    "kde-open5",
+                    "kde-open",
+                ]:
+                    if shutil.which(cmd):
+                        if "kioclient" in cmd:
+                            args = [cmd, "exec", url]
+                        else:
+                            args = [cmd, url]
+                        break
+            elif desktop_env == "gnome":
+                for cmd in ["gio", "gvfs-open", "gnome-open"]:
+                    if shutil.which(cmd):
+                        if cmd == "gio":
+                            args = ["gio", "open", "--", url]
+                        else:
+                            args = [cmd, url]
+                        break
+
+            if not args:
+                args = ["xdg-open", url]
+
+            run_non_blocking(args)
 
 
 def run_blocking(cmd: list[str], cwd: Path | None = None) -> None:
     if os.name == "nt":
-        subprocess.run(cmd, env=get_safe_env(), cwd=cwd)
+        subprocess.run(cmd, env=get_safe_env(), cwd=cwd, shell=True)
     else:
         cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
         subprocess.run(cmd, env=get_safe_env(), cwd=cwd, shell=True)
 
 
-def run_non_blocking(cmd: list[str], cwd: Path | None = None) -> None:
+def run_non_blocking(
+    cmd: list[str], cwd: Path | None = None, env: dict | None = None
+) -> None:
+    new_env = get_safe_env()
+    if env:
+        new_env.update(env)
     try:
         if os.name == "nt":
-            args_str = subprocess.list2cmdline([str(c) for c in cmd[1:]])
-            os.startfile(
-                str(cmd[0]),
-                operation="open",
-                arguments=args_str,
-                cwd=str(cwd) if cwd else None,
-                show_cmd=0,
+            creationflags = (
+                subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+            )
+            subprocess.Popen(
+                cmd,
+                env=new_env,
+                cwd=cwd,
+                creationflags=creationflags,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
             )
         else:
             cmd.insert(0, "nohup")
             cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
             subprocess.Popen(
                 cmd,
-                env=get_safe_env(),
+                env=new_env,
                 cwd=cwd,
                 shell=True,
                 start_new_session=True,
@@ -639,8 +694,15 @@ def launch_game(
 
     # Launch the game
     logger.info(f"Launching: {' '.join(cmd)}")
+    env = None
+    if os.name == "posix" and (
+        os.getenv("WAYLAND_DISPLAY") or os.getenv("XDG_SESSION_TYPE") == "wayland"
+    ):
+        if "SDL_VIDEODRIVER" not in os.environ:
+            env = {"SDL_VIDEODRIVER": "x11"}
+
     try:
-        run_non_blocking(cmd, cwd=exe_path.parent)
+        run_non_blocking(cmd, cwd=exe_path.parent, env=env)
     except Exception as e:
         logger.error(f"Failed to launch game: {e}")
 
@@ -758,14 +820,7 @@ def open_install_folder(dest: Path | None = None) -> None:
 
     game_dir = get_game_dir(dest)
     if game_dir.exists() and game_dir.is_dir():
-        game_dir = str(game_dir)
-        if os.name == "nt":
-            os.startfile(game_dir)
-        elif sys.platform == "darwin":
-            run_non_blocking(["open", game_dir])
-        else:
-            # todo: what about gtk-launch? gtk4-launch? gio launch? kde-open? kde-open6? kde-open5? exo-open? gvfs-open? bleh.
-            run_non_blocking(["xdg-open", game_dir])
+        run_open(str(game_dir))
 
 
 def change_install_folder(new_game_dir: Path):

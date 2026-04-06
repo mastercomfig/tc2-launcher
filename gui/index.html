@@ -539,6 +539,9 @@
         });
 
         function requestStateUpdate(update = true) {
+            if (window.pywebview || window.location.protocol === "file:") {
+                throw new Error("Not in valid state for fallback API.");
+            }
             return queryWebApi("state", update ? "1" : "").then(d => d.json()).then(state => {
                 document.getElementById("launch-options").value = state.opts;
                 document.getElementById("prerelease").checked = state.branch === "prerelease" ? true : false;
