@@ -42,7 +42,7 @@ jobs:
           name: TC2Launcher
           path: dist/TC2Launcher.exe
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python
