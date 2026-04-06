@@ -185,7 +185,7 @@ def on_loaded():
         return
     if not check_launch_game(-1):
         update_and_notify()
-    if has_init:
+    if has_init and not using_fallback:
         # if we refresh the page, we need a little kick to the state since the page reverted back to initial state
         window = get_window()
         for k, v in window.state.items():
