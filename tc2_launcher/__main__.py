@@ -4,6 +4,7 @@ import os
 import queue
 import sys
 import threading
+import traceback
 from pathlib import Path
 from shutil import copyfile
 from time import sleep
@@ -199,4 +200,8 @@ if __name__ == "__main__":
         sys.stdout = open(os.devnull, "w")
     if sys.stderr is None:
         sys.stderr = open(os.devnull, "w")
-    main()
+    try:
+        main()
+    except Exception:
+        logger.error(traceback.format_exc())
+        sys.exit(1)

@@ -28,7 +28,7 @@ import requests
 import vdf
 
 from tc2_launcher import logger
-from tc2_launcher.hardware import INTEL_VENDOR_ID, get_vulkan_info
+from tc2_launcher.hardware import INTEL_VENDOR_ID, get_dx_info, get_vulkan_info
 from tc2_launcher.utils import DEV_INSTANCE, VERSION_STR
 
 TC2_REPO = "mastercomfig/tc2"
@@ -712,7 +712,13 @@ def launch_game(
         extra_options = settings.get("opts")
     if not extra_options or not isinstance(extra_options, list):
         extra_options = []
-    supported, gpu_info = get_vulkan_info()
+    vulkan_supported, gpu_info = get_vulkan_info()
+    supported = vulkan_supported
+    if not supported and os.name == "nt":
+        dx_supported, dx_gpu_info = get_dx_info()
+        supported = dx_supported
+        if dx_supported:
+            gpu_info = dx_gpu_info
     if not supported:
         error_text = (
             "Your graphics card falls below our official minimum specs.\n\n"
@@ -741,7 +747,8 @@ def launch_game(
                 use_noborder = False
         if use_noborder:
             default_args += ["-sw", "-noborder"]
-        default_args += ["-vulkan"]
+        if vulkan_supported:
+            default_args += ["-vulkan"]
     else:
         # force no OpenGL
         banned_opts += ["-gl"]
