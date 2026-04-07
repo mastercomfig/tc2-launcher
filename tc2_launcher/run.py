@@ -712,13 +712,17 @@ def launch_game(
         extra_options = settings.get("opts")
     if not extra_options or not isinstance(extra_options, list):
         extra_options = []
-    vulkan_supported, gpu_info = get_vulkan_info()
-    supported = vulkan_supported
+    vk_supported, vk_gpu_info, vk_error_msg = get_vulkan_info()
+    supported = vk_supported
+    gpu_info = vk_gpu_info
+    error_reason = vk_error_msg
     if not supported and os.name == "nt":
-        dx_supported, dx_gpu_info = get_dx_info()
+        dx_supported, dx_gpu_info, dx_error_msg = get_dx_info()
         supported = dx_supported
         if dx_supported:
             gpu_info = dx_gpu_info
+        else:
+            error_reason = dx_error_msg
     if not supported:
         error_text = (
             "Your graphics card falls below our official minimum specs.\n\n"
@@ -730,7 +734,9 @@ def launch_game(
             "Unfortunately this means that Team Comtress 2 will not be able to\n"
             "run on some graphics cards from 2006 or before.\n"
         )
-        logger.error("GPU minimum requirements not met.")
+        if error_reason:
+            error_text += f"\nAdditional details:\n{error_reason}\n"
+        logger.error(f"GPU minimum requirements not met: {error_reason}")
         return error_text, True
 
     if gpu_info and gpu_info["vendor_id"] == INTEL_VENDOR_ID:
@@ -747,7 +753,7 @@ def launch_game(
                 use_noborder = False
         if use_noborder:
             default_args += ["-sw", "-noborder"]
-        if vulkan_supported:
+        if vk_supported:
             default_args += ["-vulkan"]
     else:
         # force no OpenGL
