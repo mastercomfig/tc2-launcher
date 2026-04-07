@@ -603,18 +603,19 @@ def run_non_blocking(
         new_env.update(env)
     try:
         if os.name == "nt":
-            creationflags = (
-                subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-            )
+            creationflags = subprocess.CREATE_NEW_CONSOLE
+            startupinfo = subprocess.STARTUPINFO()
             subprocess.Popen(
                 cmd,
                 env=new_env,
                 cwd=cwd,
-                creationflags=creationflags,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                shell=True,
+                stdin=None,
+                stdout=None,
+                stderr=None,
                 close_fds=True,
+                creationflags=creationflags,
+                startupinfo=startupinfo,
             )
         else:
             cmd.insert(0, "nohup")
@@ -624,10 +625,11 @@ def run_non_blocking(
                 env=new_env,
                 cwd=cwd,
                 shell=True,
+                stdin=None,
+                stdout=None,
+                stderr=None,
+                close_fds=True,
                 start_new_session=True,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
             )
     except Exception as e:
         cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
@@ -723,7 +725,7 @@ def launch_game(
             gpu_info = dx_gpu_info
         else:
             error_reason = dx_error_msg
-    if not supported or True:
+    if not supported:
         error_text = (
             "Your graphics card falls below our official minimum specs.\n\n"
             "In previous versions, this spec was recommended for minor graphical\n"
