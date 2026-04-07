@@ -723,7 +723,7 @@ def launch_game(
             gpu_info = dx_gpu_info
         else:
             error_reason = dx_error_msg
-    if not supported:
+    if not supported or True:
         error_text = (
             "Your graphics card falls below our official minimum specs.\n\n"
             "In previous versions, this spec was recommended for minor graphical\n"
@@ -732,10 +732,10 @@ def launch_game(
             "Shader Model 3.0 and so adherence to the prior recommended spec\n"
             "is now the minimum requirement.\n\n"
             "Unfortunately this means that Team Comtress 2 will not be able to\n"
-            "run on some graphics cards from 2006 or before.\n"
+            "run on some graphics cards from 2006 or before."
         )
         if error_reason:
-            error_text += f"\nAdditional details:\n{error_reason}\n"
+            error_text += f"\n\nAdditional details:\n{error_reason}"
         logger.error(f"GPU minimum requirements not met: {error_reason}")
         return error_text, True
 
