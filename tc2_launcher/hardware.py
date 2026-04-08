@@ -4,6 +4,7 @@ import traceback
 from typing import Dict, Optional, Tuple
 
 from tc2_launcher import logger
+from tc2_launcher.env import restore_system_env
 
 VK_STRUCTURE_TYPE_APPLICATION_INFO = 0
 VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO = 1
@@ -84,7 +85,11 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
         if os.name == "nt":
             vk = ctypes.WinDLL("vulkan-1.dll")
         else:
-            vk = ctypes.CDLL("libvulkan.so.1")
+            with restore_system_env():
+                try:
+                    vk = ctypes.CDLL("libvulkan.so.1")
+                except OSError:
+                    vk = ctypes.CDLL("libvulkan.so")
     except OSError:
         logger.error("Vulkan not found")
         logger.error(traceback.format_exc())
@@ -140,7 +145,13 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
                 ctypes.pointer(create_info), None, ctypes.pointer(vk_instance_1_0)
             )
             if test_res != 0:
-                error_msg = "No Vulkan drivers were found on your system."
+                logger.error(
+                    f"Vulkan 1.0 fallback instance creation failed: {test_res}"
+                )
+                if test_res == -9:
+                    error_msg = "No Vulkan drivers were found on your system."
+                else:
+                    error_msg = f"Vulkan driver error (code {test_res})."
             else:
                 if hasattr(vk, "vkDestroyInstance"):
                     vk.vkDestroyInstance.argtypes = [ctypes.c_void_p, ctypes.c_void_p]

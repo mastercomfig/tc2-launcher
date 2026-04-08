@@ -1,0 +1,148 @@
+import os
+import sys
+from contextlib import contextmanager
+from pathlib import Path
+
+import vdf
+
+from tc2_launcher import logger
+from tc2_launcher.utils import DEV_INSTANCE
+
+try:
+    import winreg
+except ImportError:
+    winreg = None
+
+
+def get_steam_libraries() -> dict[int, tuple[Path, Path]]:
+    if os.name == "nt":
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Valve\Steam")
+        steam_path_str, _ = winreg.QueryValueEx(key, "SteamPath")
+        steam_path = Path(steam_path_str)
+        winreg.CloseKey(key)
+    else:
+        steam_path = Path.home() / ".steam" / "steam"
+    library_folders = steam_path / "config" / "libraryfolders.vdf"
+    with library_folders.open("r", encoding="utf-8") as f:
+        data = vdf.load(f)
+    library_data = {}
+    for library in data["libraryfolders"].values():
+        path = Path(library["path"])
+        if not path.exists() or not path.is_dir():
+            continue
+        dirs = [
+            d for d in path.iterdir() if d.is_dir() and d.name.lower() == "steamapps"
+        ]
+        dirs = list(sorted(dirs, key=lambda x: x.name, reverse=True))
+        steamapps = dirs[0]
+        for app in library["apps"].keys():
+            library_data[int(app)] = steamapps
+    return library_data
+
+
+def get_steam_app(app_id: int) -> Path | None:
+    libraries = get_steam_libraries()
+    steamapps_path = libraries.get(app_id)
+    if steamapps_path is None:
+        return None
+    appmanifest = steamapps_path / f"appmanifest_{app_id}.acf"
+    with appmanifest.open("r", encoding="utf-8") as f:
+        data = vdf.load(f)
+    app_data = data["AppState"]
+    install_dir = steamapps_path / "common" / app_data["installdir"]
+    return install_dir
+
+
+SLR3_APPID = 1628350
+
+
+def get_slr3_path() -> Path | None:
+    slr3_dir = get_steam_app(SLR3_APPID)
+    if slr3_dir is None:
+        return None
+    return slr3_dir / "run"
+
+
+SLR3_ENV_NAME = "SLR_SNIPER_PATH"
+
+
+def get_safe_env(with_slr: bool = False) -> dict:
+    new_env = os.environ.copy()
+    if os.name == "posix":
+        if with_slr:
+            if SLR3_ENV_NAME not in new_env:
+                slr3_path = get_slr3_path()
+                if slr3_path is not None:
+                    new_env[SLR3_ENV_NAME] = str(slr3_path)
+        if not DEV_INSTANCE:
+            lp_orig = new_env.get("LD_LIBRARY_PATH_ORIG")
+            if lp_orig is not None:
+                new_env["LD_LIBRARY_PATH"] = lp_orig
+            else:
+                new_env.pop("LD_LIBRARY_PATH", None)
+    if not DEV_INSTANCE:
+        meipass = getattr(sys, "_MEIPASS", "")
+        if meipass:
+            try:
+                meipass_path = Path(meipass).resolve()
+                meipass_lower = str(meipass).lower()
+                for key, value in list(new_env.items()):
+                    if not value:
+                        continue
+                    if meipass_lower not in value.lower():
+                        continue
+
+                    paths = value.split(os.pathsep)
+                    new_paths = []
+                    changed = False
+                    for p in paths:
+                        if not p:
+                            continue
+                        try:
+                            if Path(p).resolve().is_relative_to(meipass_path):
+                                changed = True
+                                continue
+                        except Exception:
+                            pass
+                        new_paths.append(p)
+
+                    if changed:
+                        if not new_paths:
+                            new_env.pop(key, None)
+                        else:
+                            new_env[key] = os.pathsep.join(new_paths)
+            except Exception as e:
+                logger.error(f"Failed to sanitize environment variables: {e}")
+
+    return new_env
+
+
+@contextmanager
+def restore_system_env(with_slr: bool = False):
+    old_lib_path = os.environ.get("LD_LIBRARY_PATH")
+
+    try:
+        safe_env = get_safe_env(with_slr)
+        new_lib_path = safe_env.get("LD_LIBRARY_PATH")
+        if new_lib_path is not None:
+            os.environ["LD_LIBRARY_PATH"] = new_lib_path
+        elif old_lib_path is not None:
+            os.environ.pop("LD_LIBRARY_PATH")
+
+        yield
+    finally:
+        if old_lib_path is not None:
+            os.environ["LD_LIBRARY_PATH"] = old_lib_path
+        else:
+            os.environ.pop("LD_LIBRARY_PATH", None)
+
+
+def get_desktop_environment() -> str | None:
+    if os.name != "posix":
+        return None
+    xdg_desktop = os.getenv("XDG_CURRENT_DESKTOP", "").split(":")
+    if "GNOME" in xdg_desktop or "GNOME_DESKTOP_SESSION_ID" in os.environ:
+        return "gnome"
+    if "KDE" in xdg_desktop or "KDE_FULL_SESSION" in os.environ:
+        return "kde"
+    return None
