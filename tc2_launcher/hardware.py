@@ -81,172 +81,177 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
         containing 'name', 'vendor_id', and 'vendor_name' if a Vulkan-capable
         GPU is found, otherwise None.
     """
-    try:
-        if os.name == "nt":
-            vk = ctypes.WinDLL("vulkan-1.dll")
-        else:
-            with restore_system_env():
-                try:
-                    vk = ctypes.CDLL("libvulkan.so.1")
-                except OSError:
-                    vk = ctypes.CDLL("libvulkan.so")
-    except OSError:
-        logger.error("Vulkan not found")
-        logger.error(traceback.format_exc())
-        return (
-            False,
-            None,
-            "Vulkan library not found. Please install Vulkan graphics drivers.",
-        )
-
-    required_ver_tup = (1, 3, 0)
-    required_ver_str = ".".join(map(str, required_ver_tup))
-    required_ver = _make_version(*required_ver_tup)
-
-    app_info = VkApplicationInfo(
-        sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        pNext=None,
-        pApplicationName=b"Team Comtress 2",
-        applicationVersion=1,
-        pEngineName=b"Source",
-        engineVersion=1,
-        apiVersion=required_ver,
-    )
-
-    create_info = VkInstanceCreateInfo(
-        sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        pNext=None,
-        flags=0,
-        pApplicationInfo=ctypes.pointer(app_info),
-        enabledLayerCount=0,
-        ppEnabledLayerNames=None,
-        enabledExtensionCount=0,
-        ppEnabledExtensionNames=None,
-    )
-
-    vk_instance = ctypes.c_void_p()
-
-    # We must not define argtypes for vkCreateInstance statically if we check it right after,
-    # because it might not even be exported. But if DLL loaded, it's there.
-    if not hasattr(vk, "vkCreateInstance"):
-        logger.error("Vulkan library invalid")
-        return False, None, "Vulkan library invalid."
-
-    res = vk.vkCreateInstance(
-        ctypes.pointer(create_info), None, ctypes.pointer(vk_instance)
-    )
-    if res != 0:
-        logger.error(f"Could not create Vulkan instance: {res}")
-        error_msg = f"Could not create Vulkan instance: {res}."
-        if res == -9:  # VK_ERROR_INCOMPATIBLE_DRIVER
-            app_info.apiVersion = _make_version(1, 0, 0)
-            vk_instance_1_0 = ctypes.c_void_p()
-            test_res = vk.vkCreateInstance(
-                ctypes.pointer(create_info), None, ctypes.pointer(vk_instance_1_0)
-            )
-            if test_res != 0:
-                logger.error(
-                    f"Vulkan 1.0 fallback instance creation failed: {test_res}"
-                )
-                if test_res == -9:
-                    error_msg = "No Vulkan drivers were found on your system."
+    with restore_system_env():
+        try:
+            try:
+                if os.name == "nt":
+                    vk = ctypes.WinDLL("vulkan-1.dll")
                 else:
-                    error_msg = f"Vulkan driver error (code {test_res})."
-            else:
-                if hasattr(vk, "vkDestroyInstance"):
-                    vk.vkDestroyInstance.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-                vk.vkDestroyInstance(vk_instance_1_0, None)
-                supported_version_str = "1.0.0"
-                if hasattr(vk, "vkEnumerateInstanceVersion"):
-                    vk.vkEnumerateInstanceVersion.argtypes = [
-                        ctypes.POINTER(ctypes.c_uint32)
-                    ]
-                    api_version = ctypes.c_uint32(0)
-                    if vk.vkEnumerateInstanceVersion(ctypes.pointer(api_version)) == 0:
-                        v = api_version.value
-                        supported_version_str = (
-                            f"{v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}"
-                        )
-                error_msg = (
-                    f"Your Vulkan driver only supports Vulkan {supported_version_str}, "
-                    f"but Vulkan {required_ver_str} is required."
+                    try:
+                        vk = ctypes.CDLL("libvulkan.so.1")
+                    except OSError:
+                        vk = ctypes.CDLL("libvulkan.so")
+            except OSError:
+                logger.error("Vulkan not found")
+                logger.error(traceback.format_exc())
+                return (
+                    False,
+                    None,
+                    "Vulkan library not found. Please install Vulkan graphics drivers.",
                 )
-        return False, None, error_msg
 
-    if hasattr(vk, "vkEnumeratePhysicalDevices"):
-        vk.vkEnumeratePhysicalDevices.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_uint32),
-            ctypes.c_void_p,
-        ]
-    if hasattr(vk, "vkGetPhysicalDeviceProperties"):
-        vk.vkGetPhysicalDeviceProperties.argtypes = [
-            ctypes.c_void_p,
-            ctypes.POINTER(VkPhysicalDeviceProperties),
-        ]
-    if hasattr(vk, "vkDestroyInstance"):
-        vk.vkDestroyInstance.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            required_ver_tup = (1, 3, 0)
+            required_ver_str = ".".join(map(str, required_ver_tup))
+            required_ver = _make_version(*required_ver_tup)
 
-    try:
-        gpu_count = ctypes.c_uint32(0)
-        res = vk.vkEnumeratePhysicalDevices(
-            vk_instance, ctypes.pointer(gpu_count), None
-        )
+            app_info = VkApplicationInfo(
+                sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,
+                pNext=None,
+                pApplicationName=b"Team Comtress 2",
+                applicationVersion=1,
+                pEngineName=b"Source",
+                engineVersion=1,
+                apiVersion=required_ver,
+            )
 
-        if res != 0 or gpu_count.value == 0:
-            vk.vkDestroyInstance(vk_instance, None)
-            logger.error(f"Could not get physical device count: {res}")
-            return True, None, None
+            create_info = VkInstanceCreateInfo(
+                sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+                pNext=None,
+                flags=0,
+                pApplicationInfo=ctypes.pointer(app_info),
+                enabledLayerCount=0,
+                ppEnabledLayerNames=None,
+                enabledExtensionCount=0,
+                ppEnabledExtensionNames=None,
+            )
 
-        physical_devices = (ctypes.c_void_p * gpu_count.value)()
-        res = vk.vkEnumeratePhysicalDevices(
-            vk_instance, ctypes.pointer(gpu_count), physical_devices
-        )
+            vk_instance = ctypes.c_void_p()
 
-        if res != 0:
-            vk.vkDestroyInstance(vk_instance, None)
-            logger.error(f"Could not enumerate physical devices: {res}")
-            return True, None, None
+            # We must not define argtypes for vkCreateInstance statically if we check it right after,
+            # because it might not even be exported. But if DLL loaded, it's there.
+            if not hasattr(vk, "vkCreateInstance"):
+                logger.error("Vulkan library invalid")
+                return False, None, "Vulkan library invalid."
 
-        type_score = {
-            VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: 4,
-            VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: 3,
-            VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: 2,
-            VK_PHYSICAL_DEVICE_TYPE_CPU: 1,
-            VK_PHYSICAL_DEVICE_TYPE_OTHER: 0,
-        }
-        vendor_score = {
-            AMD_VENDOR_ID: 2,
-            NVIDIA_VENDOR_ID: 3,
-            INTEL_VENDOR_ID: 1,
-        }
-        best_score = -1
-        best_device_info = None
+            res = vk.vkCreateInstance(
+                ctypes.pointer(create_info), None, ctypes.pointer(vk_instance)
+            )
+            if res != 0:
+                logger.error(f"Could not create Vulkan instance: {res}")
+                error_msg = f"Could not create Vulkan instance: {res}."
+                if res == -9:  # VK_ERROR_INCOMPATIBLE_DRIVER
+                    app_info.apiVersion = _make_version(1, 0, 0)
+                    vk_instance_1_0 = ctypes.c_void_p()
+                    test_res = vk.vkCreateInstance(
+                        ctypes.pointer(create_info), None, ctypes.pointer(vk_instance_1_0)
+                    )
+                    if test_res != 0:
+                        logger.error(
+                            f"Vulkan 1.0 fallback instance creation failed: {test_res}"
+                        )
+                        if test_res == -9:
+                            error_msg = "No Vulkan drivers were found on your system."
+                        else:
+                            error_msg = f"Vulkan driver error (code {test_res})."
+                    else:
+                        if hasattr(vk, "vkDestroyInstance"):
+                            vk.vkDestroyInstance.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                        vk.vkDestroyInstance(vk_instance_1_0, None)
+                        supported_version_str = "1.0.0"
+                        if hasattr(vk, "vkEnumerateInstanceVersion"):
+                            vk.vkEnumerateInstanceVersion.argtypes = [
+                                ctypes.POINTER(ctypes.c_uint32)
+                            ]
+                            api_version = ctypes.c_uint32(0)
+                            if vk.vkEnumerateInstanceVersion(ctypes.pointer(api_version)) == 0:
+                                v = api_version.value
+                                supported_version_str = (
+                                    f"{v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}"
+                                )
+                        error_msg = (
+                            f"Your Vulkan driver only supports Vulkan {supported_version_str}, "
+                            f"but Vulkan {required_ver_str} is required."
+                        )
+                return False, None, error_msg
 
-        for i in range(gpu_count.value):
-            props = VkPhysicalDeviceProperties()
-            vk.vkGetPhysicalDeviceProperties(physical_devices[i], ctypes.pointer(props))
+            if hasattr(vk, "vkEnumeratePhysicalDevices"):
+                vk.vkEnumeratePhysicalDevices.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.POINTER(ctypes.c_uint32),
+                    ctypes.c_void_p,
+                ]
+            if hasattr(vk, "vkGetPhysicalDeviceProperties"):
+                vk.vkGetPhysicalDeviceProperties.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.POINTER(VkPhysicalDeviceProperties),
+                ]
+            if hasattr(vk, "vkDestroyInstance"):
+                vk.vkDestroyInstance.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
 
-            score = type_score.get(props.deviceType, 0)
-            if props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-                score += vendor_score.get(props.vendorID, 0)
-            if score > best_score:
-                best_score = score
-                vendor_id = props.vendorID
-                best_device_info = {
-                    "name": props.deviceName.decode("utf-8", errors="ignore"),
-                    "vendor_id": vendor_id,
-                    "vendor_name": get_gpu_vendor_name(vendor_id),
+            try:
+                gpu_count = ctypes.c_uint32(0)
+                res = vk.vkEnumeratePhysicalDevices(
+                    vk_instance, ctypes.pointer(gpu_count), None
+                )
+
+                if res != 0 or gpu_count.value == 0:
+                    vk.vkDestroyInstance(vk_instance, None)
+                    logger.error(f"Could not get physical device count: {res}")
+                    return True, None, None
+
+                physical_devices = (ctypes.c_void_p * gpu_count.value)()
+                res = vk.vkEnumeratePhysicalDevices(
+                    vk_instance, ctypes.pointer(gpu_count), physical_devices
+                )
+
+                if res != 0:
+                    vk.vkDestroyInstance(vk_instance, None)
+                    logger.error(f"Could not enumerate physical devices: {res}")
+                    return True, None, None
+
+                type_score = {
+                    VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: 4,
+                    VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: 3,
+                    VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: 2,
+                    VK_PHYSICAL_DEVICE_TYPE_CPU: 1,
+                    VK_PHYSICAL_DEVICE_TYPE_OTHER: 0,
                 }
+                vendor_score = {
+                    AMD_VENDOR_ID: 2,
+                    NVIDIA_VENDOR_ID: 3,
+                    INTEL_VENDOR_ID: 1,
+                }
+                best_score = -1
+                best_device_info = None
 
-        vk.vkDestroyInstance(vk_instance, None)
-        logger.error(f"Found Vulkan device: {best_device_info}")
-        return True, best_device_info, None
-    except Exception:
-        # In case of any weird errors calling Vulkan functions
-        logger.error("Could not get Vulkan device properties")
-        logger.error(traceback.format_exc())
-        return True, None, None
+                for i in range(gpu_count.value):
+                    props = VkPhysicalDeviceProperties()
+                    vk.vkGetPhysicalDeviceProperties(physical_devices[i], ctypes.pointer(props))
+
+                    score = type_score.get(props.deviceType, 0)
+                    if props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+                        score += vendor_score.get(props.vendorID, 0)
+                    if score > best_score:
+                        best_score = score
+                        vendor_id = props.vendorID
+                        best_device_info = {
+                            "name": props.deviceName.decode("utf-8", errors="ignore"),
+                            "vendor_id": vendor_id,
+                            "vendor_name": get_gpu_vendor_name(vendor_id),
+                        }
+
+                vk.vkDestroyInstance(vk_instance, None)
+                logger.info(f"Found Vulkan device: {best_device_info}")
+                return True, best_device_info, None
+            except Exception:
+                # In case of any weird errors calling Vulkan functions
+                logger.error("Could not get Vulkan device properties")
+                logger.error(traceback.format_exc())
+                return True, None, None
+        except Exception:
+            logger.error("Error during Vulkan info retrieval")
+            logger.error(traceback.format_exc())
+            return False, None, "Error retrieving Vulkan information."
 
 
 def get_dx_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[str]]:

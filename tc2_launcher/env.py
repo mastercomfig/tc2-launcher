@@ -142,22 +142,26 @@ def get_safe_env() -> dict:
 
 @contextmanager
 def restore_system_env():
-    old_lib_path = os.environ.get("LD_LIBRARY_PATH")
+    orig_env = os.environ.copy()
+    safe_env = get_safe_env()
+
+    to_set = {k: v for k, v in safe_env.items() if v != orig_env.get(k)}
+    to_remove = [k for k in orig_env if k not in safe_env]
 
     try:
-        safe_env = get_safe_env()
-        new_lib_path = safe_env.get("LD_LIBRARY_PATH")
-        if new_lib_path is not None:
-            os.environ["LD_LIBRARY_PATH"] = new_lib_path
-        elif old_lib_path is not None:
-            os.environ.pop("LD_LIBRARY_PATH")
+        os.environ.update(to_set)
+        for key in to_remove:
+            os.environ.pop(key, None)
 
         yield
     finally:
-        if old_lib_path is not None:
-            os.environ["LD_LIBRARY_PATH"] = old_lib_path
-        else:
-            os.environ.pop("LD_LIBRARY_PATH", None)
+        for key in to_set.keys():
+            if key in orig_env:
+                os.environ[key] = orig_env[key]
+            else:
+                os.environ.pop(key, None)
+        for key in to_remove:
+            os.environ[key] = orig_env[key]
 
 
 def get_desktop_environment() -> str | None:
