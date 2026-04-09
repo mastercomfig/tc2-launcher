@@ -178,8 +178,8 @@ def get_desktop_environment() -> str | None:
     return xdg_desktops[0]
 
 
-QT_DESKTOPS = set("kde", "plasma", "lxqt", "lxde")
-GTK_DESKTOPS = set("gnome", "xfce", "cinnamon", "mate", "budgie")
+QT_DESKTOPS = {"kde", "plasma", "lxqt", "lxde"}
+GTK_DESKTOPS = {"gnome", "xfce", "cinnamon", "mate", "budgie"}
 
 
 def is_qt_environment() -> bool:
