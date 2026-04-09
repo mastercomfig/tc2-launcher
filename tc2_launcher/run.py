@@ -16,6 +16,7 @@ try:
 except ImportError:
     winreg = None
 
+import vdf
 import zipfile
 from pathlib import Path
 from shutil import copytree, rmtree
@@ -39,6 +40,100 @@ from tc2_launcher.utils import VERSION_STR
 
 TC2_REPO = "mastercomfig/tc2"
 LAUNCHER_REPO = "mastercomfig/tc2-launcher"
+
+
+def get_native_resolution() -> tuple[int, int] | tuple[None, None]:
+    if os.name == "nt":
+        import ctypes
+        try:
+            return (
+                ctypes.windll.user32.GetSystemMetrics(0),
+                ctypes.windll.user32.GetSystemMetrics(1),
+            )
+        except Exception:
+            return None, None
+    else:
+        # Try xrandr
+        try:
+            output = subprocess.check_output(
+                ["xrandr", "--current"], stderr=subprocess.DEVNULL
+            ).decode()
+            for line in output.splitlines():
+                if "current" in line and "connected" not in line:
+                    parts = line.split("current")
+                    if len(parts) > 1:
+                        res = parts[1].split(",")[0].strip()
+                        w, h = map(int, res.split("x"))
+                        return w, h
+        except Exception:
+            pass
+
+        # Try wayland-info
+        try:
+            import re
+
+            output = subprocess.check_output(
+                ["wayland-info"], stderr=subprocess.DEVNULL
+            ).decode()
+            sections = output.split("interface: 'wl_output'")
+            for section in sections[1:]:
+                modes = section.split("mode:")
+                for mode in modes[1:]:
+                    if "flags: current" in mode:
+                        w_match = re.search(r"width:\s*(\d+)", mode)
+                        h_match = re.search(r"height:\s*(\d+)", mode)
+                        if w_match and h_match:
+                            return int(w_match.group(1)), int(h_match.group(1))
+        except Exception:
+            pass
+
+        # Fallback to /sys/class/drm
+        try:
+            for modes_file in Path("/sys/class/drm").glob("card*-*/modes"):
+                enabled_file = modes_file.parent / "enabled"
+                if (
+                    enabled_file.exists()
+                    and enabled_file.read_text().strip() == "enabled"
+                ):
+                    modes = modes_file.read_text().splitlines()
+                    if modes:
+                        w, h = map(int, modes[0].split("x"))
+                        return w, h
+        except Exception:
+            pass
+
+    return None, None
+
+
+def _read_game_settings(game_dir: Path) -> dict:
+    settings = {}
+    if os.name == "nt":
+        if winreg:
+            try:
+                key_path = r"Software\Valve\Source\tc2\Settings"
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+                    for i in range(winreg.QueryInfoKey(key)[1]):
+                        name, value, _ = winreg.EnumValue(key, i)
+                        settings[name] = value
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                logger.error(f"Failed to read registry settings: {e}")
+    else:
+        vdf_path = game_dir / "tc2" / "videoconfig_linux.cfg"
+        if vdf_path.exists():
+            try:
+                with vdf_path.open("r", encoding="utf-8") as f:
+                    data = vdf.load(f)
+                    if "videoconfig" in data:
+                        for k, v in data["videoconfig"].items():
+                            try:
+                                settings[k] = int(v)
+                            except (ValueError, TypeError):
+                                settings[k] = v
+            except Exception as e:
+                logger.error(f"Failed to read VDF settings: {e}")
+    return settings
 
 
 def default_dest_dir() -> Path:
@@ -624,14 +719,33 @@ def launch_game(
     extra_options_set = set(extra_options)
     banned_opts = []
 
+    res_w, res_h = get_native_resolution()
+    game_settings = _read_game_settings(exe_path.parent)
+
+    # Resolution check
+    res_opts = ["-w", "-width", "-h", "-height"]
+    has_res_opt = any(opt in extra_options_set for opt in res_opts)
+
+    if not has_res_opt and res_w and res_h:
+        conf_w = game_settings.get("ScreenWidth")
+        conf_h = game_settings.get("ScreenHeight")
+        if conf_w is None or conf_h is None or conf_w > res_w or conf_h > res_h:
+            default_args += ["-w", str(res_w), "-h", str(res_h)]
+
+    # Window mode check
+    window_check_opts = ["-sw", "-windowed", "-noborder", "-full", "-fullscreen"]
+    has_window_opt = any(opt in extra_options_set for opt in window_check_opts)
+
+    if not has_window_opt:
+        conf_windowed = game_settings.get("ScreenWindowed")
+        conf_noborder = game_settings.get("ScreenNoBorder")
+        if conf_windowed is None or conf_noborder is None:
+            if os.name == "nt":
+                default_args += ["-sw", "-noborder"]
+            else:
+                default_args += ["-full"]
+
     if os.name == "nt":
-        noborder_check_opts = ["-sw", "-windowed", "-noborder", "-full", "-fullscreen"]
-        use_noborder = True
-        for opt in noborder_check_opts:
-            if opt in extra_options_set:
-                use_noborder = False
-        if use_noborder:
-            default_args += ["-sw", "-noborder"]
         if vk_supported:
             default_args += ["-vulkan"]
     else:
