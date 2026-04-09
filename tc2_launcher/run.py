@@ -612,7 +612,13 @@ def launch_game(
         return error_text, True
 
     if gpu_info and gpu_info["vendor_id"] == INTEL_VENDOR_ID:
-        default_args += ["-force_vendor_id", "0x10DE", "-force_device_id", "0xFFFE"]
+        default_args += [
+            "-force_vendor_id",
+            "0x10DE",
+            "-force_device_id",
+            "0xFFFE",
+            "-disable_d3d9_hacks",
+        ]
         default_cmds += ["+mat_tonemapping_occlusion_use_stencil", "1"]
 
     extra_options_set = set(extra_options)
