@@ -129,6 +129,32 @@ def main():
 
     parser = argparse.ArgumentParser(description=f"TC2 Launcher v{VERSION_STR}")
     parser.add_argument(
+        "--vulkan-info",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--dx-info",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+
+    # Handle hidden info flags early
+    temp_args, _ = parser.parse_known_args()
+    if temp_args.vulkan_info:
+        from tc2_launcher.hardware import _get_vulkan_info_internal
+        import json
+        is_supported, gpu_info, error_msg = _get_vulkan_info_internal()
+        print(json.dumps({"is_supported": is_supported, "gpu_info": gpu_info, "error_msg": error_msg}))
+        return
+    if temp_args.dx_info:
+        from tc2_launcher.hardware import get_dx_info
+        import json
+        is_supported, gpu_info, error_msg = get_dx_info()
+        print(json.dumps({"is_supported": is_supported, "gpu_info": gpu_info, "error_msg": error_msg}))
+        return
+
+    parser.add_argument(
         "--dest",
         default=None,
         help="Destination folder to write data to. Defaults to platform-specific data location",

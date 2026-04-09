@@ -4,7 +4,8 @@ import traceback
 from typing import Dict, Optional, Tuple
 
 from tc2_launcher import logger
-from tc2_launcher.env import restore_system_env
+from tc2_launcher.env import get_safe_env, restore_system_env
+from tc2_launcher.utils import DEV_INSTANCE
 
 VK_STRUCTURE_TYPE_APPLICATION_INFO = 0
 VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO = 1
@@ -72,7 +73,9 @@ def get_gpu_vendor_name(vendor_id: int) -> str:
     return vendors.get(vendor_id, "Unknown")
 
 
-def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[str]]:
+def _get_vulkan_info_internal() -> Tuple[
+    bool, Optional[Dict[str, str | int]], Optional[str]
+]:
     """
     Checks for Vulkan support and retrieves GPU vendor information.
 
@@ -143,7 +146,9 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
                     app_info.apiVersion = _make_version(1, 0, 0)
                     vk_instance_1_0 = ctypes.c_void_p()
                     test_res = vk.vkCreateInstance(
-                        ctypes.pointer(create_info), None, ctypes.pointer(vk_instance_1_0)
+                        ctypes.pointer(create_info),
+                        None,
+                        ctypes.pointer(vk_instance_1_0),
                     )
                     if test_res != 0:
                         logger.error(
@@ -155,7 +160,10 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
                             error_msg = f"Vulkan driver error (code {test_res})."
                     else:
                         if hasattr(vk, "vkDestroyInstance"):
-                            vk.vkDestroyInstance.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                            vk.vkDestroyInstance.argtypes = [
+                                ctypes.c_void_p,
+                                ctypes.c_void_p,
+                            ]
                         vk.vkDestroyInstance(vk_instance_1_0, None)
                         supported_version_str = "1.0.0"
                         if hasattr(vk, "vkEnumerateInstanceVersion"):
@@ -163,7 +171,12 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
                                 ctypes.POINTER(ctypes.c_uint32)
                             ]
                             api_version = ctypes.c_uint32(0)
-                            if vk.vkEnumerateInstanceVersion(ctypes.pointer(api_version)) == 0:
+                            if (
+                                vk.vkEnumerateInstanceVersion(
+                                    ctypes.pointer(api_version)
+                                )
+                                == 0
+                            ):
                                 v = api_version.value
                                 supported_version_str = (
                                     f"{v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}"
@@ -226,7 +239,9 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
 
                 for i in range(gpu_count.value):
                     props = VkPhysicalDeviceProperties()
-                    vk.vkGetPhysicalDeviceProperties(physical_devices[i], ctypes.pointer(props))
+                    vk.vkGetPhysicalDeviceProperties(
+                        physical_devices[i], ctypes.pointer(props)
+                    )
 
                     score = type_score.get(props.deviceType, 0)
                     if props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
@@ -252,6 +267,63 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
             logger.error("Error during Vulkan info retrieval")
             logger.error(traceback.format_exc())
             return False, None, "Error retrieving Vulkan information."
+
+
+def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[str]]:
+    """
+    Checks for Vulkan support and retrieves GPU vendor information.
+    On Linux, this is performed in a separate process.
+    """
+    import sys
+
+    # Only use multi-process on Linux when bundled
+    if os.name == "posix" and not DEV_INSTANCE:
+        import json
+        import subprocess
+
+        try:
+            # sys.executable points to the bundle executable
+            # We call it with --vulkan-info which we added to __main__.py
+            cmd = [sys.executable, "--vulkan-info"]
+            logger.info(f"Running multi-process Vulkan check: {' '.join(cmd)}")
+
+            # Use a safe environment that uses system libraries
+            safe_env = get_safe_env()
+
+            # Run the command and capture output
+            result = subprocess.run(
+                cmd,
+                env=safe_env,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            )
+
+            if result.returncode == 0:
+                try:
+                    data = json.loads(result.stdout.strip())
+                    return (
+                        data.get("is_supported", False),
+                        data.get("gpu_info"),
+                        data.get("error_msg"),
+                    )
+                except json.JSONDecodeError:
+                    logger.error(
+                        f"Failed to parse Vulkan check output: {result.stdout}"
+                    )
+            else:
+                logger.error(
+                    f"Vulkan check subprocess failed (code {result.returncode}): {result.stderr}"
+                )
+        except Exception as e:
+            logger.error(f"Failed to run multi-process Vulkan check: {e}")
+
+        logger.warning(
+            "Vulkan multi-process check failed, falling back to internal check"
+        )
+
+    return _get_vulkan_info_internal()
 
 
 def get_dx_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[str]]:
