@@ -429,7 +429,7 @@ def _start_gui_private(
     current_entry = entry_name
     current_queue = queue
 
-    supported_os = os.name == "nt" or os.name == "posix"
+    supported_os = os.name == "nt" or not is_qt_environment()
     if supported_os:
         width = 800
         height = 600
@@ -486,8 +486,9 @@ def _start_gui_private(
         try:
             gui = None
             if os.name == "posix":
-                if not os.getenv("PYWEBVIEW_GUI"):
-                    gui = "qt" if is_qt_environment() else "gtk"
+                gui_pref = os.getenv("PYWEBVIEW_GUI")
+                if not gui_pref or gui_pref == "qt":
+                    gui = "gtk"
             webview.start(
                 icon=str(entry_parent / "favicon.ico"), gui=gui, debug=DEV_INSTANCE
             )
