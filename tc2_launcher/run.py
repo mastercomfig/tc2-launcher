@@ -16,7 +16,6 @@ try:
 except ImportError:
     winreg = None
 
-import vdf
 import zipfile
 from pathlib import Path
 from shutil import copytree, rmtree
@@ -26,6 +25,7 @@ from typing import Callable
 
 import psutil
 import requests
+import vdf
 
 from tc2_launcher import logger
 from tc2_launcher.env import (
@@ -45,6 +45,7 @@ LAUNCHER_REPO = "mastercomfig/tc2-launcher"
 def get_native_resolution() -> tuple[int, int] | tuple[None, None]:
     if os.name == "nt":
         import ctypes
+
         try:
             return (
                 ctypes.windll.user32.GetSystemMetrics(0),
@@ -714,7 +715,12 @@ def launch_game(
             "0xFFFE",
             "-disable_d3d9_hacks",
         ]
-        default_cmds += ["+mat_tonemapping_occlusion_use_stencil", "1"]
+        default_cmds += [
+            "+mat_tonemapping_occlusion_use_stencil",
+            "1",
+            "+mat_disable_ps_patch",
+            "1",
+        ]
 
     extra_options_set = set(extra_options)
     banned_opts = []
