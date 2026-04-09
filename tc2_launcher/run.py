@@ -160,7 +160,12 @@ def update_self() -> bool:
     try:
         filtered_args = [arg for arg in sys.argv[1:] if arg != "--replace"]
         if os.name == "posix":
-            download_path.chmod(download_path.stat().st_mode | stat.S_IEXEC)
+            download_path.chmod(
+                download_path.stat().st_mode
+                | stat.S_IEXEC
+                | stat.S_IXGRP
+                | stat.S_IXOTH
+            )
         run_non_blocking(
             [str(download_path), "--replace", str(current_path)] + filtered_args,
             env={"PYINSTALLER_RESET_ENVIRONMENT": "1"},

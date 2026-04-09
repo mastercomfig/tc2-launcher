@@ -11,6 +11,9 @@ from time import sleep
 from timeit import default_timer as timer
 from typing import Optional
 
+if os.name == "posix":
+    import stat
+
 from tc2_launcher import logger
 from tc2_launcher.gui import start_gui, start_gui_separate
 from tc2_launcher.run import (
@@ -96,6 +99,13 @@ def main():
                     raise last_exc or Exception("Unknown error deleting original file")
                 # replace the original file with the current file
                 copyfile(current_path, original_path)
+                if os.name == "posix":
+                    original_path.chmod(
+                        original_path.stat().st_mode
+                        | stat.S_IEXEC
+                        | stat.S_IXGRP
+                        | stat.S_IXOTH
+                    )
                 logger.info("Self-update applied successfully.")
         except Exception as e:
             logger.error(f"Failed to apply self-update: {e}")
