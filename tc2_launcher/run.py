@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -658,18 +659,17 @@ def launch_game(
             )
 
         ld_library_path = get_host_lib_paths()
-        export_cmd = (
-            f'export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:{ld_library_path}"; exec "$@"'
-        )
+        export_lib_cmd = f'export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:{ld_library_path}"'
         cmd = [
             str(slr_path),
             "--devel",
             "--",
             "bash",
             "-c",
-            export_cmd,
-            "bash",
-        ] + cmd
+            shlex.quote(
+                export_lib_cmd + " && " + " ".join(shlex.quote(x) for x in cmd)
+            ),
+        ]
 
     try:
         run_non_blocking(cmd, cwd=exe_path.parent, env=env)
