@@ -26,7 +26,13 @@ import psutil
 import requests
 
 from tc2_launcher import logger
-from tc2_launcher.env import get_desktop_environment, get_safe_env, restore_system_env
+from tc2_launcher.env import (
+    get_desktop_environment,
+    get_host_lib_paths,
+    get_safe_env,
+    get_slr3_path,
+    restore_system_env,
+)
 from tc2_launcher.hardware import INTEL_VENDOR_ID, get_dx_info, get_vulkan_info
 from tc2_launcher.utils import VERSION_STR
 
@@ -445,23 +451,20 @@ def run_open(url: str):
             run_non_blocking(args)
 
 
-def run_blocking(
-    cmd: list[str], cwd: Path | None = None, with_slr: bool = False
-) -> None:
+def run_blocking(cmd: list[str], cwd: Path | None = None) -> None:
     if os.name == "nt":
-        subprocess.run(cmd, env=get_safe_env(with_slr), cwd=cwd, shell=True)
+        subprocess.run(cmd, env=get_safe_env(), cwd=cwd, shell=True)
     else:
         cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
-        subprocess.run(cmd, env=get_safe_env(with_slr), cwd=cwd, shell=True)
+        subprocess.run(cmd, env=get_safe_env(), cwd=cwd, shell=True)
 
 
 def run_non_blocking(
     cmd: list[str],
     cwd: Path | None = None,
     env: dict | None = None,
-    with_slr: bool = False,
 ) -> None:
-    new_env = get_safe_env(with_slr)
+    new_env = get_safe_env()
     if env:
         new_env.update(env)
     try:
@@ -530,7 +533,7 @@ def _get_game_exe_name(running_process: bool = False) -> str:
     if os.name == "nt":
         return "tc2_win64.exe"
     else:
-        return "tc2_linux64" if running_process else "tc2.sh"
+        return "tc2_linux64"
 
 
 def _get_game_exe(dest: Path | None) -> Path | None:
@@ -568,11 +571,9 @@ def launch_game(
         "-nobreakpad",
         "-nominidumps",
     ]
-    if os.name == "nt":
-        default_cmds = ["+ip", "127.0.0.1"]
-    else:
+    default_cmds = ["+ip", "127.0.0.1"]
+    if os.name == "posix":
         default_args += ["-gathermod"]
-        default_cmds = []
     if not extra_options:
         extra_options = settings.get("opts")
     if not extra_options or not isinstance(extra_options, list):
@@ -638,15 +639,35 @@ def launch_game(
 
     # Launch the game
     logger.info(f"Launching: {' '.join(cmd)}")
-    env = None
-    if os.name == "posix" and (
-        os.getenv("WAYLAND_DISPLAY") or os.getenv("XDG_SESSION_TYPE") == "wayland"
-    ):
-        if "SDL_VIDEODRIVER" not in os.environ:
-            env = {"SDL_VIDEODRIVER": "x11"}
+    env: dict[str, str] = {}
+    if os.name == "posix":
+        if os.getenv("WAYLAND_DISPLAY") or os.getenv("XDG_SESSION_TYPE") == "wayland":
+            if "SDL_VIDEODRIVER" not in os.environ:
+                env["SDL_VIDEODRIVER"] = "x11"
+
+        slr_path = get_slr3_path()
+        if slr_path is None or not slr_path.is_file():
+            return (
+                "Steam Linux Runtime not found. Install it through Steam (or by running steam steam://install/1628350)",
+                True,
+            )
+
+        ld_library_path = get_host_lib_paths()
+        export_cmd = (
+            f'export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:{ld_library_path}"; exec "$@"'
+        )
+        cmd = [
+            str(slr_path),
+            "--devel",
+            "--",
+            "bash",
+            "-c",
+            export_cmd,
+            "bash",
+        ] + cmd
 
     try:
-        run_non_blocking(cmd, cwd=exe_path.parent, env=env, with_slr=True)
+        run_non_blocking(cmd, cwd=exe_path.parent, env=env)
     except Exception as e:
         logger.error(f"Failed to launch game: {e}")
 

@@ -13,6 +13,33 @@ try:
 except ImportError:
     winreg = None
 
+HOST_LIB_DIRS = ["/usr/lib64", "/usr/lib", "/lib64", "/lib"]
+
+SLR_LIB_DIRS = [
+    "/usr/lib/x86_64-linux-gnu",
+    "/lib/x86_64-linux-gnu",
+    "/usr/lib/i386-linux-gnu",
+    "/lib/i386-linux-gnu",
+]
+
+
+def get_host_lib_paths() -> str:
+    """Map host library directories to /run/host/ paths for use inside
+    the Sniper container, where the host filesystem is mounted at /run/host/.
+    Deduplicates via realpath (e.g. /usr/lib64 -> /usr/lib on some distros).
+    """
+    seen: set[str] = set()
+    paths: list[str] = []
+
+    for host_dir in HOST_LIB_DIRS:
+        real_dir = os.path.realpath(host_dir)
+        if real_dir in seen or not os.path.isdir(real_dir):
+            continue
+        seen.add(real_dir)
+        paths.append("/run/host" + host_dir)
+
+    return os.pathsep.join(paths)
+
 
 def get_steam_libraries() -> dict[int, tuple[Path, Path]]:
     if os.name == "nt":
@@ -66,20 +93,16 @@ def get_slr3_path() -> Path | None:
 SLR3_ENV_NAME = "SLR_SNIPER_PATH"
 
 
-def get_safe_env(with_slr: bool = False) -> dict:
+def get_safe_env() -> dict:
     new_env = os.environ.copy()
     if os.name == "posix":
-        if with_slr:
-            if SLR3_ENV_NAME not in new_env:
-                slr3_path = get_slr3_path()
-                if slr3_path is not None:
-                    new_env[SLR3_ENV_NAME] = str(slr3_path)
         if not DEV_INSTANCE:
             lp_orig = new_env.get("LD_LIBRARY_PATH_ORIG")
             if lp_orig is not None:
                 new_env["LD_LIBRARY_PATH"] = lp_orig
             else:
                 new_env.pop("LD_LIBRARY_PATH", None)
+
     if not DEV_INSTANCE:
         meipass = getattr(sys, "_MEIPASS", "")
         if meipass:
@@ -118,11 +141,11 @@ def get_safe_env(with_slr: bool = False) -> dict:
 
 
 @contextmanager
-def restore_system_env(with_slr: bool = False):
+def restore_system_env():
     old_lib_path = os.environ.get("LD_LIBRARY_PATH")
 
     try:
-        safe_env = get_safe_env(with_slr)
+        safe_env = get_safe_env()
         new_lib_path = safe_env.get("LD_LIBRARY_PATH")
         if new_lib_path is not None:
             os.environ["LD_LIBRARY_PATH"] = new_lib_path
