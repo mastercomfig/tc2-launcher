@@ -14,6 +14,7 @@ from typing import Optional
 import webview
 
 from tc2_launcher import logger
+from tc2_launcher.env import is_qt_environment
 from tc2_launcher.run import (
     change_install_folder,
     get_game_dir,
@@ -428,7 +429,7 @@ def _start_gui_private(
     current_entry = entry_name
     current_queue = queue
 
-    supported_os = os.name == "nt"
+    supported_os = os.name == "nt" or os.name == "posix"
     if supported_os:
         width = 800
         height = 600
@@ -483,7 +484,13 @@ def _start_gui_private(
         subscribe_game_version()
 
         try:
-            webview.start(icon=str(entry_parent / "favicon.ico"), debug=DEV_INSTANCE)
+            gui = None
+            if os.name == "posix":
+                if not os.getenv("PYWEBVIEW_GUI"):
+                    gui = "qt" if is_qt_environment() else "gtk"
+            webview.start(
+                icon=str(entry_parent / "favicon.ico"), gui=gui, debug=DEV_INSTANCE
+            )
         except Exception:
             logger.error("Failed to start webview window.")
             logger.error(traceback.format_exc())

@@ -167,9 +167,25 @@ def restore_system_env():
 def get_desktop_environment() -> str | None:
     if os.name != "posix":
         return None
-    xdg_desktop = os.getenv("XDG_CURRENT_DESKTOP", "").split(":")
-    if "GNOME" in xdg_desktop or "GNOME_DESKTOP_SESSION_ID" in os.environ:
+    xdg_desktop = os.getenv("XDG_CURRENT_DESKTOP")
+    if not xdg_desktop:
+        return None
+    xdg_desktops = xdg_desktop.lower().split(":")
+    if "gnome" in xdg_desktops or "GNOME_DESKTOP_SESSION_ID" in os.environ:
         return "gnome"
-    if "KDE" in xdg_desktop or "KDE_FULL_SESSION" in os.environ:
+    if "kde" in xdg_desktops or "KDE_FULL_SESSION" in os.environ:
         return "kde"
-    return None
+    return xdg_desktops[0]
+
+
+QT_DESKTOPS = set("kde", "plasma", "lxqt", "lxde")
+GTK_DESKTOPS = set("gnome", "xfce", "cinnamon", "mate", "budgie")
+
+
+def is_qt_environment() -> bool:
+    desktop_env = get_desktop_environment()
+    if desktop_env in QT_DESKTOPS:
+        return True
+    if desktop_env in GTK_DESKTOPS:
+        return False
+    return os.getenv("QT_QPA_PLATFORM", "") != ""

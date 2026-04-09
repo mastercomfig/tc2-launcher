@@ -210,6 +210,16 @@ if __name__ == "__main__":
         sys.stdout = open(os.devnull, "w")
     if sys.stderr is None:
         sys.stderr = open(os.devnull, "w")
+    # TODO: pyinstaller workaround for XDG_DATA_DIRS until #9422 is merged
+    xdg_data_dirs = os.getenv("XDG_DATA_DIRS")
+    if xdg_data_dirs and os.pathsep not in xdg_data_dirs:
+        os.environ["XDG_DATA_DIRS"] = (
+            xdg_data_dirs
+            + os.pathsep
+            + "/usr/local/share/"
+            + os.pathsep
+            + "/usr/share/"
+        )
     try:
         main()
     except Exception:
