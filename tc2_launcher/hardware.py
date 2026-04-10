@@ -288,7 +288,8 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
             logger.info(f"Running multi-process Vulkan check: {' '.join(cmd)}")
 
             # Use a safe environment that uses system libraries
-            safe_env = get_safe_env()
+            # We must preserve PYI variables so the bootloader can initialize
+            safe_env = get_safe_env(preserve_pyi=True)
 
             # Run the command and capture output
             result = subprocess.run(

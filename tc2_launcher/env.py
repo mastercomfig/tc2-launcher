@@ -93,7 +93,7 @@ def get_slr3_path() -> Path | None:
 SLR3_ENV_NAME = "SLR_SNIPER_PATH"
 
 
-def get_safe_env() -> dict:
+def get_safe_env(preserve_pyi: bool = False) -> dict:
     new_env = os.environ.copy()
     if os.name == "posix":
         if not DEV_INSTANCE:
@@ -110,7 +110,12 @@ def get_safe_env() -> dict:
                 meipass_path = Path(meipass).resolve()
                 meipass_lower = str(meipass).lower()
                 for key, value in list(new_env.items()):
-                    if not value:
+                    is_pyi = key.startswith("PYI_") or key.startswith("_PYI_")
+                    if is_pyi and not preserve_pyi:
+                        new_env.pop(key, None)
+                        continue
+
+                    if not value or is_pyi:
                         continue
                     if meipass_lower not in value.lower():
                         continue
