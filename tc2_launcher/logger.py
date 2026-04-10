@@ -54,6 +54,14 @@ def setup_logger(log_folder: Path):
     root_log.setLevel(log_level)
 
 
+def setup_silent_logger():
+    global root_log
+    root_log = logging.getLogger("tc2_launcher")
+    root_log.addHandler(logging.NullHandler())
+    root_log.setLevel(logging.CRITICAL + 1)
+    root_log.propagate = False
+
+
 def critical(msg):
     if root_log is None:
         logging.critical(msg)

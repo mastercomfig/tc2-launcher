@@ -142,12 +142,14 @@ def main():
     # Handle hidden info flags early
     temp_args, _ = parser.parse_known_args()
     if temp_args.vulkan_info:
+        logger.setup_silent_logger()
         from tc2_launcher.hardware import _get_vulkan_info_internal
         import json
         is_supported, gpu_info, error_msg = _get_vulkan_info_internal()
         print(json.dumps({"is_supported": is_supported, "gpu_info": gpu_info, "error_msg": error_msg}))
         return
     if temp_args.dx_info:
+        logger.setup_silent_logger()
         from tc2_launcher.hardware import get_dx_info
         import json
         is_supported, gpu_info, error_msg = get_dx_info()
