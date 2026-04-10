@@ -304,6 +304,7 @@ def get_vulkan_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[st
             if result.returncode == 0:
                 try:
                     data = json.loads(result.stdout.strip())
+                    logger.info(f"Vulkan check output: {data}")
                     return (
                         data.get("is_supported", False),
                         data.get("gpu_info"),
