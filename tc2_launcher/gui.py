@@ -429,7 +429,7 @@ def _start_gui_private(
     current_entry = entry_name
     current_queue = queue
 
-    supported_os = os.name == "nt" or not is_qt_environment()
+    supported_os = os.name == "nt"
     if supported_os:
         width = 800
         height = 600

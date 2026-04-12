@@ -577,7 +577,7 @@ def run_non_blocking(
                 cmd,
                 env=new_env,
                 cwd=cwd,
-                shell=True,
+                shell=False,
                 stdin=None,
                 stdout=None,
                 stderr=None,
@@ -670,8 +670,6 @@ def launch_game(
         "-steam",
         "-particles",
         "1",
-        "-nobreakpad",
-        "-nominidumps",
     ]
     default_cmds = ["+ip", "127.0.0.1"]
     if os.name == "posix":
@@ -731,6 +729,10 @@ def launch_game(
     # Resolution check
     res_opts = ["-w", "-width", "-h", "-height"]
     has_res_opt = any(opt in extra_options_set for opt in res_opts)
+
+    has_nosentry_opt = "-nosentry" in extra_options_set
+    if not has_nosentry_opt:
+        default_args += ["-nobreakpad", "-nominidumps"]
 
     if not has_res_opt and res_w and res_h:
         conf_w = game_settings.get("ScreenWidth")
