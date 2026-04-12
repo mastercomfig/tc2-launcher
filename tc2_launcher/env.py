@@ -26,10 +26,6 @@ SLR_LIB_DIRS = [
 def get_host_lib_paths() -> str:
     """Discover host library directories as /run/host/ paths for use inside
     the Sniper container, where the host filesystem is mounted at /run/host/.
-
-    Scans HOST_LIB_DIRS and their immediate subdirectories that contain .so
-    files (catches RUNPATH-resolved private dirs like /usr/lib64/pulseaudio/).
-    Deduplicates via realpath to avoid redundant entries (e.g. /usr/lib64 -> /usr/lib).
     """
     seen: set[str] = set()
     paths: list[str] = []
@@ -40,24 +36,6 @@ def get_host_lib_paths() -> str:
             continue
         seen.add(real_dir)
         paths.append("/run/host" + host_dir)
-
-        try:
-            with os.scandir(real_dir) as it:
-                for entry in it:
-                    if not entry.is_dir(follow_symlinks=False):
-                        continue
-                    try:
-                        with os.scandir(entry.path) as sub_it:
-                            if any(
-                                f.name.endswith(".so") or ".so." in f.name
-                                for f in sub_it
-                                if f.is_file(follow_symlinks=False)
-                            ):
-                                paths.append("/run/host" + os.path.join(host_dir, entry.name))
-                    except OSError:
-                        continue
-        except OSError:
-            continue
 
     return os.pathsep.join(paths)
 
