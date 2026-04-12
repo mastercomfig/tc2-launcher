@@ -780,6 +780,9 @@ def launch_game(
             if "SDL_VIDEODRIVER" not in os.environ:
                 env["SDL_VIDEODRIVER"] = "x11"
 
+        if "SDL_AUDIODRIVER" not in os.environ:
+            env["SDL_AUDIODRIVER"] = "pulseaudio"
+
         slr_path = get_slr3_path()
         if slr_path is None or not slr_path.is_file():
             return (
