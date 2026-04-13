@@ -2,6 +2,7 @@ import asyncio
 import json
 import multiprocessing
 import os
+import socket
 import sys
 import threading
 import traceback
@@ -131,6 +132,17 @@ class Api:
         except Exception as e:
             logger.error(f"Invalid path: {e}")
             return
+
+
+def find_available_port(start_port: int, max_attempts: int = 100) -> int:
+    for port in range(start_port, start_port + max_attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except socket.error:
+                continue
+    return 0
 
 
 def update_and_notify():
@@ -377,9 +389,10 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
 
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()
-        site = aiohttp.web.TCPSite(runner, "localhost", 48564)
+        port = find_available_port(48564)
+        site = aiohttp.web.TCPSite(runner, "localhost", port)
         await site.start()
-        address = "http://localhost:48564/entry"
+        address = f"http://localhost:{port}/entry"
         try:
             run_open(address)
         except Exception as e:
@@ -490,7 +503,10 @@ def _start_gui_private(
                 if not gui_pref or gui_pref == "qt":
                     gui = "gtk"
             webview.start(
-                icon=str(entry_parent / "favicon.ico"), gui=gui, debug=DEV_INSTANCE
+                icon=str(entry_parent / "favicon.ico"),
+                gui=gui,
+                debug=DEV_INSTANCE,
+                http_port=find_available_port(48564),
             )
         except Exception:
             logger.error("Failed to start webview window.")

@@ -730,8 +730,7 @@ def launch_game(
     res_opts = ["-w", "-width", "-h", "-height"]
     has_res_opt = any(opt in extra_options_set for opt in res_opts)
 
-    has_nosentry_opt = "-nosentry" in extra_options_set
-    if not has_nosentry_opt:
+    if "-nosentry" not in extra_options_set:
         default_args += ["-nobreakpad", "-nominidumps"]
 
     if not has_res_opt and res_w and res_h:
@@ -754,7 +753,7 @@ def launch_game(
                 default_args += ["-full"]
 
     if os.name == "nt":
-        if vk_supported:
+        if vk_supported and "-dx9" not in extra_options_set:
             default_args += ["-vulkan"]
     else:
         # force no OpenGL
