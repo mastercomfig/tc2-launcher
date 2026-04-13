@@ -35,7 +35,12 @@ from tc2_launcher.env import (
     get_slr3_path,
     restore_system_env,
 )
-from tc2_launcher.hardware import INTEL_VENDOR_ID, get_dx_info, get_vulkan_info
+from tc2_launcher.hardware import (
+    INTEL_VENDOR_ID,
+    NVIDIA_VENDOR_ID,
+    get_dx_info,
+    get_vulkan_info,
+)
 from tc2_launcher.utils import VERSION_STR
 
 TC2_REPO = "mastercomfig/tc2"
@@ -719,6 +724,11 @@ def launch_game(
             "+mat_disable_ps_patch",
             "1",
         ]
+
+    if os.name == "nt":
+        # disable nvidia vulkan due to DXGI swapchain issue on windows drivers
+        if gpu_info and gpu_info["vendor_id"] == NVIDIA_VENDOR_ID:
+            vk_supported = False
 
     extra_options_set = set(extra_options)
     banned_opts = []
