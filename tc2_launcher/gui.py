@@ -23,6 +23,7 @@ from tc2_launcher.run import (
     get_prerelease,
     launch_game,
     open_install_folder,
+    run_async_task,
     run_open,
     set_launch_options,
     set_prerelease,
@@ -79,13 +80,16 @@ def get_entrypoint():
 
 
 class Api:
-    def launch_game(self):
+    async def launch_game_async(self):
         err, _ = launch_game()
         if err:
             send_eval(f"showErrorModal('Error', {json.dumps(err)});")
             send_eval("setLaunchState(0);")
         else:
-            check_launch_game()
+            await check_launch_game()
+
+    def launch_game(self):
+        run_async_task(self.launch_game_async)
 
     def set_launch_options(self, options):
         if options and isinstance(options, str):
@@ -111,9 +115,12 @@ class Api:
         else:
             get_window().state.branch = prerelease
 
-    def check_for_updates(self):
-        res = update_archive()
+    async def check_for_updates_async(self):
+        res = await update_archive()
         send_eval(f"archiveReady({res});")
+
+    def check_for_updates(self):
+        run_async_task(self.check_for_updates_async)
 
     def open_install_folder(self):
         open_install_folder()
@@ -145,18 +152,18 @@ def find_available_port(start_port: int, max_attempts: int = 100) -> int:
     return 0
 
 
-def update_and_notify():
-    res = update_archive()
+async def update_and_notify():
+    res = await update_archive()
     send_eval(f"archiveReady({res});")
 
 
 def on_game_exit():
     send_eval("setLaunchState(0);")
-    update_and_notify()
+    asyncio.run(update_and_notify())
 
 
-def check_launch_game(time_limit: float = 0):
-    pid = wait_game_running(time_limit)
+async def check_launch_game(time_limit: float = 0):
+    pid = await wait_game_running(time_limit)
     has_pid = pid is not None
     res = 2 if has_pid else 0
     send_eval(f"setLaunchState({res});")
@@ -196,8 +203,13 @@ def on_loaded():
         queue_thread.start()
     if current_entry != "index":
         return
-    if not check_launch_game(-1):
-        update_and_notify()
+
+    async def task():
+        if not await check_launch_game(-1):
+            await update_and_notify()
+
+    run_async_task(task)
+
     if has_init and not using_fallback:
         # if we refresh the page, we need a little kick to the state since the page reverted back to initial state
         window = get_window()
@@ -312,10 +324,11 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
 
         async def move_install_folder_handler(r: aiohttp.web.Request):
             path = await r.text()
+            loop = asyncio.get_event_loop()
             if path:
-                api.move_install_folder(path)
+                await loop.run_in_executor(None, api.move_install_folder, path)
             else:
-                api.move_install_folder()
+                await loop.run_in_executor(None, api.move_install_folder)
             return aiohttp.web.Response()
 
         app.add_routes(
@@ -337,9 +350,16 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
 
             async def __call__(self, r: aiohttp.web.Request):
                 if self.param:
-                    self.func(await r.text())
+                    arg = await r.text()
+                    if asyncio.iscoroutinefunction(self.func):
+                        await self.func(arg)
+                    else:
+                        self.func(arg)
                 else:
-                    self.func()
+                    if asyncio.iscoroutinefunction(self.func):
+                        await self.func()
+                    else:
+                        self.func()
                 return aiohttp.web.Response()
 
         class ApiCallbackWithParamHandler(ApiCallbackHandler):
@@ -350,7 +370,7 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
             [
                 aiohttp.web.post(
                     "/api/launch_game",
-                    ApiCallbackHandler(api.launch_game),
+                    ApiCallbackHandler(api.launch_game_async),
                 )
             ]
         )
@@ -374,7 +394,7 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
             [
                 aiohttp.web.post(
                     "/api/check_for_updates",
-                    ApiCallbackHandler(api.check_for_updates),
+                    ApiCallbackHandler(api.check_for_updates_async),
                 )
             ]
         )

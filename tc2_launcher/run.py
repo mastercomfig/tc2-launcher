@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import webbrowser
+from collections.abc import Coroutine
 
 if os.name == "posix":
     import stat
@@ -16,15 +17,15 @@ try:
 except ImportError:
     winreg = None
 
+import asyncio
 import zipfile
 from pathlib import Path
 from shutil import copytree, rmtree
-from time import sleep
 from timeit import default_timer as timer
 from typing import Callable
 
+import aiohttp
 import psutil
-import requests
 import vdf
 
 from tc2_launcher import logger
@@ -172,7 +173,21 @@ github_api_headers = {
 }
 
 
-def _get_latest_release(dest: Path | None, repo: str) -> dict:
+def run_async_task(task: Coroutine):
+    # TODO: use run_coroutine_threadsafe
+    def run_task():
+        asyncio.run(task())
+
+    threading.Thread(target=run_task, daemon=True).start()
+
+
+async def _get_latest_release(
+    dest: Path | None, repo: str, session: aiohttp.ClientSession | None = None
+) -> dict:
+    if session is None:
+        async with aiohttp.ClientSession(headers=github_api_headers) as s:
+            return await _get_latest_release(dest, repo, s)
+
     if repo == TC2_REPO:
         if not dest:
             dest = default_dest_dir()
@@ -180,36 +195,33 @@ def _get_latest_release(dest: Path | None, repo: str) -> dict:
         settings = read_settings(dest)
         branch = settings.get("branch")
         if branch == "prerelease":
-            resp = requests.get(
+            async with session.get(
                 f"https://api.github.com/repos/{repo}/releases",
                 timeout=30,
                 params={"per_page": 1},
-                headers=github_api_headers,
-            )
-            resp.raise_for_status()
-            releases = resp.json()
-            return releases[0] if releases else {}
+            ) as resp:
+                resp.raise_for_status()
+                releases = await resp.json()
+                return releases[0] if releases else {}
         elif branch and branch[0].isdigit():
             try:
-                resp = requests.get(
+                async with session.get(
                     f"https://api.github.com/repos/{repo}/releases/tags/{branch}",
                     timeout=30,
-                    headers=github_api_headers,
-                )
-                resp.raise_for_status()
-                return resp.json()
+                ) as resp:
+                    resp.raise_for_status()
+                    return await resp.json()
             except Exception as e:
                 logger.error(
                     f"Failed to get release for branch {branch}, falling back to latest: {e}"
                 )
 
-    resp = requests.get(
+    async with session.get(
         f"https://api.github.com/repos/{repo}/releases/latest",
         timeout=30,
-        headers=github_api_headers,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    ) as resp:
+        resp.raise_for_status()
+        return await resp.json()
 
 
 def _find_asset(release: dict, asset_filter: str) -> tuple[str, str, str] | None:
@@ -221,10 +233,11 @@ def _find_asset(release: dict, asset_filter: str) -> tuple[str, str, str] | None
     return None
 
 
-def update_self() -> bool:
+async def update_self() -> bool:
     try:
-        release = _get_latest_release(None, LAUNCHER_REPO)
-        tag = release.get("tag_name", "").lstrip("v")
+        async with aiohttp.ClientSession(headers=github_api_headers) as session:
+            release = await _get_latest_release(None, LAUNCHER_REPO, session)
+            tag = release.get("tag_name", "").lstrip("v")
     except Exception as e:
         logger.error(f"Failed to get self-update info: {e}")
         return False
@@ -251,7 +264,8 @@ def update_self() -> bool:
     download_path = dest_dir / "update" / tag / asset_name
     logger.info("Downloading self-update...")
     try:
-        _download(download_url, download_path)
+        async with aiohttp.ClientSession(headers=github_api_headers) as session:
+            await _download(download_url, download_path, session)
     except Exception as e:
         logger.error(f"Failed to download self-update: {e}")
         return False
@@ -333,12 +347,18 @@ def write_settings(dest: Path | None, settings: dict) -> None:
     _write_data(path, settings)
 
 
-def _download(url: str, dest_path: Path) -> None:
+async def _download(
+    url: str, dest_path: Path, session: aiohttp.ClientSession | None = None
+) -> None:
+    if session is None:
+        async with aiohttp.ClientSession(headers=github_api_headers) as s:
+            return await _download(url, dest_path, s)
+
     dest_path.parent.mkdir(parents=True, exist_ok=True)
-    with requests.get(url, stream=True, timeout=60) as r:
+    async with session.get(url, timeout=aiohttp.ClientTimeout(total=3600)) as r:
         r.raise_for_status()
         with open(dest_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
+            async for chunk in r.content.iter_chunked(1024 * 1024):
                 if chunk:
                     f.write(chunk)
 
@@ -405,7 +425,7 @@ def subscribe_game_version_change(
     game_version_callbacks.append(callback)
 
 
-def update_archive(
+async def update_archive(
     dest: Path | None = None,
     force: bool = False,
 ) -> int:
@@ -419,10 +439,11 @@ def update_archive(
         fail_code = 2
 
     try:
-        release = _get_latest_release(dest, TC2_REPO)
-        tag = release.get("tag_name")
-        if not tag:
-            logger.error("Could not determine release tag.")
+        async with aiohttp.ClientSession(headers=github_api_headers) as session:
+            release = await _get_latest_release(dest, TC2_REPO, session)
+            tag = release.get("tag_name")
+            if not tag:
+                logger.error("Could not determine release tag.")
     except Exception as e:
         logger.error(f"Failed to fetch latest release info: {e}")
         release = {}
@@ -473,7 +494,8 @@ def update_archive(
 
         logger.info(f"Downloading latest asset to {asset_path}...")
         try:
-            _download(download_url, asset_path)
+            async with aiohttp.ClientSession(headers=github_api_headers) as session:
+                await _download(download_url, asset_path, session)
         except Exception as e:
             logger.error(f"Failed to download asset: {e}")
             return fail_code
@@ -853,7 +875,7 @@ def wait_game_exit(pid, callback):
 DEFAULT_TIME_LIMIT = 5
 
 
-def wait_game_running(time_limit: float = DEFAULT_TIME_LIMIT) -> int | None:
+async def wait_game_running(time_limit: float = DEFAULT_TIME_LIMIT) -> int | None:
     game_exe_name = _get_game_exe_name(running_process=True)
     game_dir = get_game_dir()
 
@@ -867,14 +889,17 @@ def wait_game_running(time_limit: float = DEFAULT_TIME_LIMIT) -> int | None:
         for p in psutil.process_iter(["pid", "name", "exe"]):
             if p.info["name"] != game_exe_name:
                 continue
-            exe = Path(p.info["exe"])
-            if not exe.is_relative_to(game_dir):
+            try:
+                exe = Path(p.info["exe"])
+                if not exe.is_relative_to(game_dir):
+                    continue
+                return p.pid
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
-            return p.pid
         if time_limit <= interval:
             break
         before = timer()
-        sleep(interval)
+        await asyncio.sleep(interval)
         time_limit -= timer() - before
     return None
 

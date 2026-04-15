@@ -1,6 +1,7 @@
 import argparse
 import multiprocessing
 import os
+import asyncio
 import queue
 import sys
 import threading
@@ -116,7 +117,7 @@ def main():
 
         should_exit = False
 
-        if not DEV_INSTANCE and update_self():
+        if not DEV_INSTANCE and asyncio.run(update_self()):
             should_exit = True
 
         should_launch_updater = False
@@ -216,10 +217,10 @@ def main():
 
     logger.setup_logger(dest)
 
-    update_archive(
+    asyncio.run(update_archive(
         dest=dest,
         force=args.force,
-    )
+    ))
 
     # Persistence of options
     if args.save_opts:
