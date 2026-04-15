@@ -2,6 +2,7 @@ import asyncio
 import json
 import multiprocessing
 import os
+import random
 import socket
 import sys
 import threading
@@ -255,13 +256,12 @@ def fallback_keep_alive():
     global last_eval_time
     watch_start_time = timer()
     while True:
-        sleep(10 if last_eval_time is None else 2)
+        keepalive_time = 10 if last_eval_time is None else 5
+        sleep(keepalive_time + random.uniform(-0.5, 0.5))
         if sys.is_finalizing():
             return
-        keepalive_time = 10
         if last_eval_time is not None:
             watch_start_time = last_eval_time
-            keepalive_time = 5
         if timer() - watch_start_time >= keepalive_time:
             if os.name == "nt":
                 interrupt_main()
