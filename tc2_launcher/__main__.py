@@ -1,7 +1,7 @@
 import argparse
+import asyncio
 import multiprocessing
 import os
-import asyncio
 import queue
 import sys
 import threading
@@ -128,7 +128,9 @@ def main():
 
         clean_self_update()
 
-    parser = argparse.ArgumentParser(description=f"TC2 Launcher v{VERSION_STR}")
+    parser = argparse.ArgumentParser(
+        description=f"Team Comtress Launcher v{VERSION_STR}"
+    )
     parser.add_argument(
         "--vulkan-info",
         action="store_true",
@@ -144,17 +146,37 @@ def main():
     temp_args, _ = parser.parse_known_args()
     if temp_args.vulkan_info:
         logger.setup_silent_logger()
-        from tc2_launcher.hardware import _get_vulkan_info_internal
         import json
+
+        from tc2_launcher.hardware import _get_vulkan_info_internal
+
         is_supported, gpu_info, error_msg = _get_vulkan_info_internal()
-        print(json.dumps({"is_supported": is_supported, "gpu_info": gpu_info, "error_msg": error_msg}))
+        print(
+            json.dumps(
+                {
+                    "is_supported": is_supported,
+                    "gpu_info": gpu_info,
+                    "error_msg": error_msg,
+                }
+            )
+        )
         return
     if temp_args.dx_info:
         logger.setup_silent_logger()
-        from tc2_launcher.hardware import get_dx_info
         import json
+
+        from tc2_launcher.hardware import get_dx_info
+
         is_supported, gpu_info, error_msg = get_dx_info()
-        print(json.dumps({"is_supported": is_supported, "gpu_info": gpu_info, "error_msg": error_msg}))
+        print(
+            json.dumps(
+                {
+                    "is_supported": is_supported,
+                    "gpu_info": gpu_info,
+                    "error_msg": error_msg,
+                }
+            )
+        )
         return
 
     parser.add_argument(
@@ -217,10 +239,12 @@ def main():
 
     logger.setup_logger(dest)
 
-    asyncio.run(update_archive(
-        dest=dest,
-        force=args.force,
-    ))
+    asyncio.run(
+        update_archive(
+            dest=dest,
+            force=args.force,
+        )
+    )
 
     # Persistence of options
     if args.save_opts:

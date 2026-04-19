@@ -1,6 +1,6 @@
-# TC2 Launcher
+# Team Comtress Launcher
 
-Manages downloading and launching TC2.
+Manages downloading and launching Team Comtress.
 
 ## Installation
 

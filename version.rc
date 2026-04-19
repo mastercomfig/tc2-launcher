@@ -30,12 +30,12 @@ StringFileInfo(
   StringTable(
     u'040904B0',
     [StringStruct(u'CompanyName', u'mastercomfig'),
-    StringStruct(u'FileDescription', u'TC2 Launcher'),
+    StringStruct(u'FileDescription', u'Team Comtress Launcher'),
     StringStruct(u'FileVersion', u'1.0.15.0'),
     StringStruct(u'InternalName', u'tc2_launcher'),
     StringStruct(u'LegalCopyright', u'Copyright © mastercomfig'),
     StringStruct(u'OriginalFilename', u'TC2Launcher.exe'),
-    StringStruct(u'ProductName', u'TC2 Launcher'),
+    StringStruct(u'ProductName', u'Team Comtress Launcher'),
     StringStruct(u'ProductVersion', u'1.0.15.0')])
   ]), 
 VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
