@@ -598,19 +598,19 @@ def run_non_blocking(
         new_env.update(env)
     try:
         if os.name == "nt":
-            creationflags = subprocess.CREATE_NEW_CONSOLE
-            startupinfo = subprocess.STARTUPINFO()
+            creationflags = (
+                subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+            )
             subprocess.Popen(
                 cmd,
                 env=new_env,
                 cwd=cwd,
                 shell=False,
-                stdin=None,
-                stdout=None,
-                stderr=None,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 close_fds=True,
                 creationflags=creationflags,
-                startupinfo=startupinfo,
             )
         else:
             cmd.insert(0, "nohup")
@@ -620,9 +620,9 @@ def run_non_blocking(
                 env=new_env,
                 cwd=cwd,
                 shell=True,
-                stdin=None,
-                stdout=None,
-                stderr=None,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 close_fds=True,
                 start_new_session=True,
             )
@@ -687,7 +687,7 @@ def launch_game(
         dest = default_dest_dir()
 
     exe_path = _get_game_exe(dest)
-    if not exe_path:
+    if not exe_path or not exe_path.exists():
         logger.error(f"Could not locate game executable '{exe_path}'")
         return f"Could not locate game executable '{exe_path}'", False
 
@@ -801,7 +801,8 @@ def launch_game(
     if has_banned_opts:
         extra_options = [x for x in extra_options if x not in banned_opts_set]
 
-    cmd = [str(exe_path)] + default_args + extra_options + default_cmds
+    exe_file = exe_path.name if os.name == "nt" else str(exe_path)
+    cmd = [exe_file] + default_args + extra_options + default_cmds
 
     # Launch the game
     logger.info(f"Launching: {' '.join(cmd)}")
@@ -834,10 +835,14 @@ def launch_game(
             ),
         ]
 
+    original_cwd = os.getcwd()
     try:
+        os.chdir(exe_path.parent)
         run_non_blocking(cmd, cwd=exe_path.parent, env=env)
     except Exception as e:
         logger.error(f"Failed to launch game: {e}")
+    finally:
+        os.chdir(original_cwd)
 
     return None, False
 

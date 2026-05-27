@@ -8,11 +8,6 @@ import vdf
 from tc2_launcher import logger
 from tc2_launcher.utils import DEV_INSTANCE
 
-try:
-    import winreg
-except ImportError:
-    winreg = None
-
 HOST_LIB_DIRS = ["/usr/lib64", "/usr/lib", "/lib64", "/lib"]
 
 SLR_LIB_DIRS = [
@@ -40,8 +35,10 @@ def get_host_lib_paths() -> str:
     return os.pathsep.join(paths)
 
 
-def get_steam_libraries() -> dict[int, tuple[Path, Path]]:
+def get_steam_libraries() -> dict[int, Path]:
     if os.name == "nt":
+        import winreg
+
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Valve\Steam")
         steam_path_str, _ = winreg.QueryValueEx(key, "SteamPath")
         steam_path = Path(steam_path_str)
@@ -126,7 +123,10 @@ def get_safe_env(preserve_pyi: bool = False) -> dict:
                         if not p:
                             continue
                         try:
-                            if Path(p).resolve().is_relative_to(meipass_path):
+                            if (
+                                Path(p).resolve().is_relative_to(meipass_path)
+                                or "_mei" in p.lower()
+                            ):
                                 changed = True
                                 continue
                         except Exception:
