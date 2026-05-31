@@ -212,6 +212,19 @@ files = [
 ]
 
 [[package]]
+name = "certifi"
+version = "2026.5.20"
+description = "Python package for providing Mozilla's CA Bundle."
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+markers = "sys_platform == \"win32\" or sys_platform == \"linux\""
+files = [
+    {file = "certifi-2026.5.20-py3-none-any.whl", hash = "sha256:3c52e209ba0a4ad7aebe60436a4ab349c39e1e602e8c134221e546902ad25897"},
+    {file = "certifi-2026.5.20.tar.gz", hash = "sha256:69dea482ab64caa7b9f6aba1c6bf48bb6a5448d1c0f1b17ab42ad8c763a5344d"},
+]
+
+[[package]]
 name = "cffi"
 version = "2.0.0"
 description = "Foreign Function Interface for Python calling C code."
@@ -1263,4 +1276,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "b17084f0c8bfa93a64a12fc9398550345d3aecac235a71edf978fdfa86cb659c"
+content-hash = "77bfdb9b5d063d10654b8e926459222af1ac94c4dd70188a8c2fad9639369cec"
