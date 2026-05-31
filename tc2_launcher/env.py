@@ -1,39 +1,15 @@
 import os
+import ssl
 import sys
 from contextlib import contextmanager
 from pathlib import Path
 
+import certifi
 import psutil
 import vdf
 
 from tc2_launcher import logger
 from tc2_launcher.utils import DEV_INSTANCE
-
-HOST_LIB_DIRS = ["/usr/lib64", "/usr/lib", "/lib64", "/lib"]
-
-SLR_LIB_DIRS = [
-    "/usr/lib/x86_64-linux-gnu",
-    "/lib/x86_64-linux-gnu",
-    "/usr/lib/i386-linux-gnu",
-    "/lib/i386-linux-gnu",
-]
-
-
-def get_host_lib_paths() -> str:
-    """Discover host library directories as /run/host/ paths for use inside
-    the Sniper container, where the host filesystem is mounted at /run/host/.
-    """
-    seen: set[str] = set()
-    paths: list[str] = []
-
-    for host_dir in HOST_LIB_DIRS:
-        real_dir = os.path.realpath(host_dir)
-        if real_dir in seen or not os.path.isdir(real_dir):
-            continue
-        seen.add(real_dir)
-        paths.append("/run/host" + host_dir)
-
-    return os.pathsep.join(paths)
 
 
 def get_steam_libraries() -> dict[int, Path]:
@@ -221,3 +197,12 @@ def is_steam_running():
         except:
             return False
         return steam_proc.name() == "steam"
+
+
+def get_ssl_context() -> ssl.SSLContext:
+    context = ssl.create_default_context()
+
+    if not context.get_ca_certs():
+        context.load_verify_locations(cafile=certifi.where())
+
+    return context

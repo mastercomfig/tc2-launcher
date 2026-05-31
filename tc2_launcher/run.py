@@ -1,13 +1,12 @@
 import hashlib
 import json
 import os
-import shlex
 import subprocess
 import sys
 import tempfile
 import threading
 import webbrowser
-from collections.abc import Awaitable, Coroutine
+from collections.abc import Coroutine
 
 if os.name == "posix":
     import stat
@@ -31,9 +30,9 @@ import vdf
 from tc2_launcher import logger
 from tc2_launcher.env import (
     get_desktop_environment,
-    get_host_lib_paths,
     get_safe_env,
     get_slr3_path,
+    get_ssl_context,
     is_steam_running,
     restore_system_env,
 )
@@ -183,12 +182,8 @@ def run_async_thread(task: Coroutine[Any, Any, Any]):
 
 
 async def _get_latest_release(
-    dest: Path | None, repo: str, session: aiohttp.ClientSession | None = None
+    dest: Path | None, repo: str, session: aiohttp.ClientSession
 ) -> dict:
-    if session is None:
-        async with aiohttp.ClientSession(headers=github_api_headers) as s:
-            return await _get_latest_release(dest, repo, s)
-
     if repo == TC2_REPO:
         if not dest:
             dest = default_dest_dir()
@@ -236,7 +231,14 @@ def _find_asset(release: dict, asset_filter: str) -> tuple[str, str, str] | None
 
 async def update_self() -> bool:
     try:
-        async with aiohttp.ClientSession(headers=github_api_headers) as session:
+        ssl = get_ssl_context()
+        if ssl:
+            connector = aiohttp.TCPConnector(ssl=get_ssl_context())
+        else:
+            connector = None
+        async with aiohttp.ClientSession(
+            headers=github_api_headers, connector=connector
+        ) as session:
             release = await _get_latest_release(None, LAUNCHER_REPO, session)
             tag = release.get("tag_name", "").lstrip("v")
     except Exception as e:
@@ -265,7 +267,14 @@ async def update_self() -> bool:
     download_path = dest_dir / "update" / tag / asset_name
     logger.info("Downloading self-update...")
     try:
-        async with aiohttp.ClientSession(headers=github_api_headers) as session:
+        ssl = get_ssl_context()
+        if ssl:
+            connector = aiohttp.TCPConnector(ssl=get_ssl_context())
+        else:
+            connector = None
+        async with aiohttp.ClientSession(
+            headers=github_api_headers, connector=connector
+        ) as session:
             await _download(download_url, download_path, session)
     except Exception as e:
         logger.error(f"Failed to download self-update: {e}")
@@ -348,13 +357,7 @@ def write_settings(dest: Path | None, settings: dict) -> None:
     _write_data(path, settings)
 
 
-async def _download(
-    url: str, dest_path: Path, session: aiohttp.ClientSession | None = None
-) -> None:
-    if session is None:
-        async with aiohttp.ClientSession(headers=github_api_headers) as s:
-            return await _download(url, dest_path, s)
-
+async def _download(url: str, dest_path: Path, session: aiohttp.ClientSession) -> None:
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     async with session.get(url, timeout=aiohttp.ClientTimeout(total=3600)) as r:
         r.raise_for_status()
@@ -508,7 +511,14 @@ async def update_archive(
         fail_code = 2
 
     try:
-        async with aiohttp.ClientSession(headers=github_api_headers) as session:
+        ssl = get_ssl_context()
+        if ssl:
+            connector = aiohttp.TCPConnector(ssl=get_ssl_context())
+        else:
+            connector = None
+        async with aiohttp.ClientSession(
+            headers=github_api_headers, connector=connector
+        ) as session:
             release = await _get_latest_release(dest, TC2_REPO, session)
             tag = release.get("tag_name")
             if not tag:
@@ -563,7 +573,14 @@ async def update_archive(
 
         logger.info(f"Downloading latest asset to {asset_path}...")
         try:
-            async with aiohttp.ClientSession(headers=github_api_headers) as session:
+            ssl = get_ssl_context()
+            if ssl:
+                connector = aiohttp.TCPConnector(ssl=get_ssl_context())
+            else:
+                connector = None
+            async with aiohttp.ClientSession(
+                headers=github_api_headers, connector=connector
+            ) as session:
                 await _download(download_url, asset_path, session)
         except Exception as e:
             logger.error(f"Failed to download asset: {e}")
