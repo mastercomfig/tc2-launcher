@@ -24,7 +24,7 @@ from tc2_launcher.run import (
     get_prerelease,
     launch_game,
     open_install_folder,
-    run_async_task,
+    run_async_thread,
     run_open,
     set_launch_options,
     set_prerelease,
@@ -90,7 +90,7 @@ class Api:
             await check_launch_game()
 
     def launch_game(self):
-        run_async_task(self.launch_game_async)
+        run_async_thread(self.launch_game_async())
 
     def set_launch_options(self, options):
         if options and isinstance(options, str):
@@ -121,7 +121,7 @@ class Api:
         send_eval(f"archiveReady({res});")
 
     def check_for_updates(self):
-        run_async_task(self.check_for_updates_async)
+        run_async_thread(self.check_for_updates_async())
 
     def open_install_folder(self):
         open_install_folder()
@@ -150,7 +150,7 @@ def find_available_port(start_port: int, max_attempts: int = 100) -> int:
                 return port
             except socket.error:
                 continue
-    return 0
+    return start_port
 
 
 async def update_and_notify():
@@ -160,7 +160,7 @@ async def update_and_notify():
 
 def on_game_exit():
     send_eval("setLaunchState(0);")
-    asyncio.run(update_and_notify())
+    run_async_thread(update_and_notify())
 
 
 async def check_launch_game(time_limit: float = 0):
@@ -209,7 +209,7 @@ def on_loaded():
         if not await check_launch_game(-1):
             await update_and_notify()
 
-    run_async_task(task)
+    run_async_thread(task())
 
     if has_init and not using_fallback:
         # if we refresh the page, we need a little kick to the state since the page reverted back to initial state
@@ -243,8 +243,8 @@ def start_gui_separate(entry_name: str = "index", **kwargs):
     return p, q
 
 
-def start_gui(entry_name: str = "index", **kwargs):
-    _start_gui_private(entry_name, **kwargs)
+async def start_gui(entry_name: str = "index", **kwargs):
+    await _start_gui_private(entry_name, **kwargs)
 
 
 last_eval_time = None
@@ -433,13 +433,13 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         logger.error(f"Could not start fallback GUI: {e}")
 
 
-def fallback_gui_main(entry: str, extra_options: str, branch: str):
+async def fallback_gui_main(entry: str, extra_options: str, branch: str):
     global using_fallback
     using_fallback = True
-    asyncio.run(start_fallback_gui(entry, extra_options, branch))
+    await start_fallback_gui(entry, extra_options, branch)
 
 
-def _start_gui_private(
+async def _start_gui_private(
     entry_name: str = "index", queue: Optional[multiprocessing.Queue] = None, **kwargs
 ):
     global current_entry
@@ -530,4 +530,4 @@ def _start_gui_private(
         using_fallback = True
         subscribe_game_version()
     if not window:
-        fallback_gui_main(entry, extra_options_str, branch)
+        await fallback_gui_main(entry, extra_options_str, branch)

@@ -218,7 +218,7 @@ async def main():
 
     if launch_gui:
         logger.setup_logger(default_dest_dir())
-        start_gui()
+        await start_gui()
         return
 
     args = parser.parse_args()

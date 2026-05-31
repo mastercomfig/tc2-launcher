@@ -173,13 +173,11 @@ github_api_headers = {
     "User-Agent": "TC2Launcher",
 }
 
-FuncType = Callable[[], Coroutine[Any, Any, Any]]
 
-
-def run_async_task(task: FuncType):
+def run_async_thread(task: Coroutine[Any, Any, Any]):
     # TODO: use run_coroutine_threadsafe
     def run_task():
-        asyncio.run(task())
+        asyncio.run(task)
 
     threading.Thread(target=run_task, daemon=True).start()
 
