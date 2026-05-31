@@ -7,7 +7,7 @@ import sys
 import tempfile
 import threading
 import webbrowser
-from collections.abc import Coroutine
+from collections.abc import Awaitable, Coroutine
 
 if os.name == "posix":
     import stat
@@ -22,7 +22,7 @@ import zipfile
 from pathlib import Path
 from shutil import copytree, rmtree
 from timeit import default_timer as timer
-from typing import Callable
+from typing import Any, Callable
 
 import aiohttp
 import psutil
@@ -34,6 +34,7 @@ from tc2_launcher.env import (
     get_host_lib_paths,
     get_safe_env,
     get_slr3_path,
+    is_steam_running,
     restore_system_env,
 )
 from tc2_launcher.hardware import (
@@ -172,8 +173,10 @@ github_api_headers = {
     "User-Agent": "TC2Launcher",
 }
 
+FuncType = Callable[[], Coroutine[Any, Any, Any]]
 
-def run_async_task(task: Coroutine):
+
+def run_async_task(task: FuncType):
     # TODO: use run_coroutine_threadsafe
     def run_task():
         asyncio.run(task())
@@ -197,7 +200,7 @@ async def _get_latest_release(
         if branch == "prerelease":
             async with session.get(
                 f"https://api.github.com/repos/{repo}/releases",
-                timeout=30,
+                timeout=aiohttp.ClientTimeout(total=30),
                 params={"per_page": 1},
             ) as resp:
                 resp.raise_for_status()
@@ -207,7 +210,7 @@ async def _get_latest_release(
             try:
                 async with session.get(
                     f"https://api.github.com/repos/{repo}/releases/tags/{branch}",
-                    timeout=30,
+                    timeout=aiohttp.ClientTimeout(total=30),
                 ) as resp:
                     resp.raise_for_status()
                     return await resp.json()
@@ -218,7 +221,7 @@ async def _get_latest_release(
 
     async with session.get(
         f"https://api.github.com/repos/{repo}/releases/latest",
-        timeout=30,
+        timeout=aiohttp.ClientTimeout(total=30),
     ) as resp:
         resp.raise_for_status()
         return await resp.json()
@@ -382,7 +385,7 @@ class ZipFileWithPermissions(zipfile.ZipFile):
         if not isinstance(member, zipfile.ZipInfo):
             member = self.getinfo(member)
 
-        targetpath = super()._extract_member(member, targetpath, pwd)
+        targetpath = super()._extract_member(member, targetpath, pwd)  # type: ignore
 
         attr = member.external_attr >> 16
         if attr != 0:
@@ -425,14 +428,82 @@ def subscribe_game_version_change(
     game_version_callbacks.append(callback)
 
 
+def _update_dedicated_dependencies(dest: Path):
+    if os.name != "posix":
+        return
+    import shutil
+
+    logger.info("Updating dedicated server dependencies via steamcmd...")
+    cmds = [
+        [
+            "steamcmd",
+            "+force_install_dir",
+            str(dest / "SteamLinuxRuntime_sniper"),
+            "+login",
+            "anonymous",
+            "+app_update",
+            "1628350",
+            "+quit",
+        ],
+        [
+            "steamcmd",
+            "+force_install_dir",
+            str(dest / "tf2"),
+            "+login",
+            "anonymous",
+            "+app_update",
+            "232250",
+            "+quit",
+        ],
+    ]
+    for cmd in cmds:
+        logger.info(f"Running: {' '.join(cmd)}")
+        run_blocking(cmd)
+
+    tf2_dir = dest / "tf2"
+    tf2ds_link = dest / "tf2ds"
+    if not tf2ds_link.exists() and tf2_dir.exists():
+        try:
+            tf2ds_link.symlink_to(tf2_dir.name)
+        except Exception as e:
+            logger.error(f"Failed to create tf2ds symlink: {e}")
+
+    sdk64_dir = Path.home() / ".steam" / "sdk64"
+    sdk64_dir.mkdir(parents=True, exist_ok=True)
+    steamclient_link = sdk64_dir / "steamclient.so"
+    if not steamclient_link.exists():
+        steamcmd_path = shutil.which("steamcmd")
+        if steamcmd_path:
+            steamcmd_real = Path(steamcmd_path).resolve()
+            possible_paths = [
+                Path.home() / ".steam" / "steamcmd" / "linux64" / "steamclient.so",
+                Path.home()
+                / ".local"
+                / "share"
+                / "Steam"
+                / "steamcmd"
+                / "linux64"
+                / "steamclient.so",
+                steamcmd_real.parent / "linux64" / "steamclient.so",
+            ]
+            for p in possible_paths:
+                if p.exists():
+                    try:
+                        steamclient_link.symlink_to(p)
+                        break
+                    except Exception as e:
+                        logger.error(f"Failed to create steamclient.so symlink: {e}")
+
+
 async def update_archive(
     dest: Path | None = None,
     force: bool = False,
+    dedicated: bool = False,
 ) -> int:
     if not dest:
         dest = default_dest_dir()
 
-    exe_path = _get_game_exe(dest)
+    exe_path = _get_game_exe(dest, dedicated)
     if exe_path is not None:
         fail_code = 1
     else:
@@ -516,12 +587,15 @@ async def update_archive(
         logger.error(f"Game directory '{game_dir}' does not exist after extraction.")
         return fail_code
 
-    exe_path = _get_game_exe(dest)
+    exe_path = _get_game_exe(dest, dedicated)
     if not exe_path:
         logger.error("Could not locate game executable after update.")
         return -2
 
     logger.info("Extraction complete.")
+
+    if dedicated:
+        _update_dedicated_dependencies(dest)
 
     written = False
     if tag:
@@ -592,43 +666,40 @@ def run_non_blocking(
     cmd: list[str],
     cwd: Path | None = None,
     env: dict | None = None,
-) -> None:
+) -> subprocess.Popen:
     new_env = get_safe_env()
     if env:
         new_env.update(env)
-    try:
-        if os.name == "nt":
-            creationflags = (
-                subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-            )
-            subprocess.Popen(
-                cmd,
-                env=new_env,
-                cwd=cwd,
-                shell=False,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                close_fds=True,
-                creationflags=creationflags,
-            )
-        else:
-            cmd.insert(0, "nohup")
-            cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
-            subprocess.Popen(
-                cmd,
-                env=new_env,
-                cwd=cwd,
-                shell=True,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                close_fds=True,
-                start_new_session=True,
-            )
-    except Exception as e:
-        cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
-        logger.error(f"Failed to run command {cmd_str}: {e}")
+
+    if os.name == "nt":
+        creationflags = (
+            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        )
+        return subprocess.Popen(
+            cmd,
+            env=new_env,
+            cwd=cwd,
+            shell=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            creationflags=creationflags,
+        )
+    else:
+        cmd.insert(0, "nohup")
+        cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
+        return subprocess.Popen(
+            cmd,
+            env=new_env,
+            cwd=cwd,
+            shell=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            start_new_session=True,
+        )
 
 
 def get_game_dir(dest: Path | None = None) -> Path:
@@ -657,22 +728,24 @@ def get_game_dir(dest: Path | None = None) -> Path:
     return dest / "game"
 
 
-def _get_game_exe_name(running_process: bool = False) -> str:
+def _get_game_exe_name(running_process: bool = False, dedicated: bool = False) -> str:
     # Determine executable name based on platform
     if os.name == "nt":
         return "tc2_win64.exe"
     else:
+        if dedicated and not running_process:
+            return "start_dedicated_tc2.sh"
         return "tc2_linux64"
 
 
-def _get_game_exe(dest: Path | None) -> Path | None:
+def _get_game_exe(dest: Path | None, dedicated: bool = False) -> Path | None:
     if not dest:
         dest = default_dest_dir()
 
     game_dir = get_game_dir(dest)
 
     # Determine executable based on platform
-    exe_path = game_dir / _get_game_exe_name()
+    exe_path = game_dir / _get_game_exe_name(dedicated=dedicated)
 
     if exe_path and exe_path.exists():
         return exe_path
@@ -682,29 +755,38 @@ def _get_game_exe(dest: Path | None) -> Path | None:
 def launch_game(
     dest: Path | None = None,
     extra_options: list[str] | None = None,
-) -> tuple[str, bool] | tuple[None, bool]:
+    dedicated: bool = False,
+) -> tuple[str | None, bool, subprocess.Popen | None]:
     if not dest:
         dest = default_dest_dir()
 
-    exe_path = _get_game_exe(dest)
+    exe_path = _get_game_exe(dest, dedicated)
     if not exe_path or not exe_path.exists():
         logger.error(f"Could not locate game executable '{exe_path}'")
-        return f"Could not locate game executable '{exe_path}'", False
+        return f"Could not locate game executable '{exe_path}'", False, None
 
-    # Resolve options with persistence
-    settings = read_settings(dest)
     default_args = [
         "-steam",
         "-particles",
         "1",
     ]
-    default_cmds = ["+ip", "127.0.0.1"]
+    default_cmds = ["+ip", "127.0.0.1", "+sv_pure", "1"]
     if os.name == "posix":
         default_args += ["-gathermod"]
+
+    # Resolve options with persistence
+    settings = read_settings(dest)
     if not extra_options:
         extra_options = settings.get("opts")
     if not extra_options or not isinstance(extra_options, list):
         extra_options = []
+
+    if dedicated:
+        default_args += ["-console", "-dedicated"]
+        if os.name == "posix":
+            if not is_steam_running():
+                default_args += ["-nosteamclient"]
+
     vk_supported, vk_gpu_info, vk_error_msg = get_vulkan_info()
     supported = vk_supported
     gpu_info = vk_gpu_info
@@ -730,7 +812,7 @@ def launch_game(
         if error_reason:
             error_text += f"\n\nAdditional details:\n{error_reason}"
         logger.error(f"GPU minimum requirements not met: {error_reason}")
-        return error_text, True
+        return error_text, True, None
 
     if gpu_info and gpu_info["vendor_id"] == INTEL_VENDOR_ID:
         default_args += [
@@ -801,50 +883,54 @@ def launch_game(
     if has_banned_opts:
         extra_options = [x for x in extra_options if x not in banned_opts_set]
 
-    exe_file = exe_path.name if os.name == "nt" else str(exe_path)
+    exe_file = exe_path.name if os.name == "nt" else f"./{exe_path.name}"
     cmd = [exe_file] + default_args + extra_options + default_cmds
 
     # Launch the game
     logger.info(f"Launching: {' '.join(cmd)}")
     env: dict[str, str] = {}
     if os.name == "posix":
-        if os.getenv("WAYLAND_DISPLAY") or os.getenv("XDG_SESSION_TYPE") == "wayland":
-            if "SDL_VIDEODRIVER" not in os.environ:
-                env["SDL_VIDEODRIVER"] = "x11"
+        if not dedicated:
+            if (
+                os.getenv("WAYLAND_DISPLAY")
+                or os.getenv("XDG_SESSION_TYPE") == "wayland"
+            ):
+                if "SDL_VIDEODRIVER" not in os.environ:
+                    env["SDL_VIDEODRIVER"] = "x11"
 
-        if "SDL_AUDIODRIVER" not in os.environ:
-            env["SDL_AUDIODRIVER"] = "pulseaudio"
+            if "SDL_AUDIODRIVER" not in os.environ:
+                env["SDL_AUDIODRIVER"] = "pulseaudio"
 
-        slr_path = get_slr3_path()
+        slr_path = get_slr3_path(dedicated=dedicated, dest=dest)
         if slr_path is None or not slr_path.is_file():
             return (
                 "Steam Linux Runtime not found. Install it through Steam (or by running steam steam://install/1628350)",
                 True,
+                None,
             )
 
-        ld_library_path = get_host_lib_paths()
-        export_lib_cmd = f'export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:{ld_library_path}"'
-        cmd = [
-            str(slr_path),
-            "--devel",
-            "--",
-            "bash",
-            "-c",
-            shlex.quote(
-                export_lib_cmd + " && " + " ".join(shlex.quote(x) for x in cmd)
-            ),
-        ]
+        if not dedicated:
+            cmd = [
+                str(slr_path),
+                "--devel",
+                "--",
+                " ".join(cmd),
+            ]
+        else:
+            env[SLR3_ENV_NAME] = str(slr_path)
 
     original_cwd = os.getcwd()
+    proc = None
     try:
         os.chdir(exe_path.parent)
-        run_non_blocking(cmd, cwd=exe_path.parent, env=env)
+        proc = run_non_blocking(cmd, cwd=exe_path.parent, env=env)
     except Exception as e:
         logger.error(f"Failed to launch game: {e}")
+        return str(e), True, None
     finally:
         os.chdir(original_cwd)
 
-    return None, False
+    return None, False, proc
 
 
 wait_game_exit_thread = None
@@ -880,9 +966,13 @@ def wait_game_exit(pid, callback):
 DEFAULT_TIME_LIMIT = 5
 
 
-async def wait_game_running(time_limit: float = DEFAULT_TIME_LIMIT) -> int | None:
-    game_exe_name = _get_game_exe_name(running_process=True)
-    game_dir = get_game_dir()
+async def wait_game_running(
+    time_limit: float = DEFAULT_TIME_LIMIT,
+    dedicated: bool = False,
+    dest: Path | None = None,
+) -> int | None:
+    game_exe_name = _get_game_exe_name(running_process=True, dedicated=dedicated)
+    game_dir = get_game_dir(dest)
 
     interval = 0.2
     if time_limit == 0:

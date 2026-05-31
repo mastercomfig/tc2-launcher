@@ -3,6 +3,7 @@ import sys
 from contextlib import contextmanager
 from pathlib import Path
 
+import psutil
 import vdf
 
 from tc2_launcher import logger
@@ -79,8 +80,13 @@ def get_steam_app(app_id: int) -> Path | None:
 SLR3_APPID = 1628350
 
 
-def get_slr3_path() -> Path | None:
-    slr3_dir = get_steam_app(SLR3_APPID)
+def get_slr3_path(dedicated: bool = False, dest: Path | None = None) -> Path | None:
+    if dedicated:
+        if not dest:
+            dest = Path.home() / ".local/share/Steam/steamcmd"
+        slr3_dir = dest / "SteamLinuxRuntime_sniper"
+    else:
+        slr3_dir = get_steam_app(SLR3_APPID)
     if slr3_dir is None:
         return None
     return slr3_dir / "run"
@@ -193,3 +199,25 @@ def is_qt_environment() -> bool:
     if desktop_env in GTK_DESKTOPS:
         return False
     return os.getenv("QT_QPA_PLATFORM", "") != ""
+
+
+def is_steam_running():
+    if os.name == "nt":
+        for p in psutil.process_iter(["name"]):
+            try:
+                if "steam.exe" == p.info["name"].lower():
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        return False
+    else:
+        pid_path = Path.home() / ".steam/steam.pid"
+        if not pid_path.exists():
+            return False
+        with open(pid_path) as pid_file:
+            pid = pid_file.read()
+        try:
+            steam_proc = psutil.Process(int(pid))
+        except:
+            return False
+        return steam_proc.name() == "steam"

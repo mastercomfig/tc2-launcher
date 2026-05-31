@@ -20,6 +20,7 @@ from tc2_launcher.gui import start_gui, start_gui_separate
 from tc2_launcher.run import (
     clean_self_update,
     default_dest_dir,
+    get_game_dir,
     launch_game,
     set_launch_options,
     update_archive,
@@ -69,7 +70,7 @@ def close_updater_gui():
         updater_thread_queue.put("close")
 
 
-def main():
+async def main():
     global should_launch_updater
     launch_gui = False
     if len(sys.argv) >= 3 and sys.argv[1] == "--replace":
@@ -117,7 +118,7 @@ def main():
 
         should_exit = False
 
-        if not DEV_INSTANCE and asyncio.run(update_self()):
+        if not DEV_INSTANCE and await update_self():
             should_exit = True
 
         should_launch_updater = False
@@ -200,6 +201,11 @@ def main():
         help="Launch the game after ensuring latest archive",
     )
     parser.add_argument(
+        "--dedicated",
+        action="store_true",
+        help="Launch the game as a dedicated server",
+    )
+    parser.add_argument(
         "--save-opts",
         action="store_true",
         help="Persist provided launch options as defaults in settings.json",
@@ -239,11 +245,10 @@ def main():
 
     logger.setup_logger(dest)
 
-    asyncio.run(
-        update_archive(
-            dest=dest,
-            force=args.force,
-        )
+    await update_archive(
+        dest=dest,
+        force=args.force,
+        dedicated=args.dedicated,
     )
 
     # Persistence of options
@@ -251,9 +256,56 @@ def main():
         set_launch_options(dest=dest, extra_options=args.opts)
 
     if args.launch:
-        err, should_print = launch_game(dest=dest, extra_options=args.opts)
-        if err and should_print:
-            logger.error(err)
+        if args.dedicated:
+            while True:
+                err, _should_print, proc = launch_game(
+                    dest=dest, extra_options=args.opts, dedicated=True
+                )
+                if err:
+                    logger.error(err)
+                    break
+
+                if not proc:
+                    logger.error("Dedicated server process not launched.")
+                    break
+
+                exit_code = None
+                try:
+                    exit_code = proc.wait()
+                except Exception as e:
+                    logger.error(f"Failed to wait for process: {e}")
+
+                game_dir = get_game_dir(dest)
+                update_file = game_dir / "tc2/update.txt"
+                needs_update = update_file.exists()
+
+                if not needs_update and exit_code == 0:
+                    logger.info("Server stopping...")
+                    break
+
+                if needs_update:
+                    logger.info(f"Server restarted for update.")
+                else:
+                    timeout = 10
+                    logger.info(
+                        f"Server exited with code {exit_code}. Server restart in {timeout} seconds."
+                    )
+                    await asyncio.sleep(timeout)
+                if needs_update:
+                    try:
+                        update_file.unlink()
+                    except Exception as e:
+                        logger.error(f"Failed to delete update.txt: {e}")
+                    logger.info("Updating...")
+                    await update_archive(
+                        dest=dest,
+                        force=False,
+                        dedicated=True,
+                    )
+        else:
+            err, should_print, _proc = launch_game(dest=dest, extra_options=args.opts)
+            if err and should_print:
+                logger.error(err)
 
 
 if __name__ == "__main__":
@@ -274,7 +326,7 @@ if __name__ == "__main__":
             + "/usr/share/"
         )
     try:
-        main()
+        asyncio.run(main())
     except Exception:
         logger.error(traceback.format_exc())
         sys.exit(1)

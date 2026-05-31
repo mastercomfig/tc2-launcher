@@ -73,9 +73,9 @@ def get_gpu_vendor_name(vendor_id: int) -> str:
     return vendors.get(vendor_id, "Unknown")
 
 
-def _get_vulkan_info_internal() -> Tuple[
-    bool, Optional[Dict[str, str | int]], Optional[str]
-]:
+def _get_vulkan_info_internal() -> (
+    Tuple[bool, Optional[Dict[str, str | int]], Optional[str]]
+):
     """
     Checks for Vulkan support and retrieves GPU vendor information.
 
@@ -373,6 +373,9 @@ def get_dx_info() -> Tuple[bool, Optional[Dict[str, str | int]], Optional[str]]:
             return False, None, "Direct3DCreate9 failed."
 
         vtable_ptr = ctypes.cast(pD3D9, ctypes.POINTER(ctypes.c_void_p)).contents.value
+        if not vtable_ptr:
+            logger.error("Failed to get Direct3D9 vtable")
+            return False, None, "Failed to access Direct3D9 functions."
         vtable = ctypes.cast(vtable_ptr, ctypes.POINTER(ctypes.c_void_p))
 
         GetAdapterCountType = ctypes.WINFUNCTYPE(ctypes.c_uint32, ctypes.c_void_p)

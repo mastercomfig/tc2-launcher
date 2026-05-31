@@ -82,7 +82,7 @@ def get_entrypoint():
 
 class Api:
     async def launch_game_async(self):
-        err, _ = launch_game()
+        err, _should_print, _proc = launch_game()
         if err:
             send_eval(f"showErrorModal('Error', {json.dumps(err)});")
             send_eval("setLaunchState(0);")
@@ -492,7 +492,7 @@ def _start_gui_private(
                 state["game_version"] = game_version
                 state["game_version_digest"] = game_version_digest
                 send_eval("requestStateUpdate();")
-            else:
+            elif window:
                 window.state.game_version = game_version
                 window.state.game_version_digest = game_version_digest
 
