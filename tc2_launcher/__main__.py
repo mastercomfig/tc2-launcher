@@ -206,6 +206,11 @@ async def main():
         help="Launch the game as a dedicated server",
     )
     parser.add_argument(
+        "--no-update",
+        action="store_true",
+        help="Skip initial game and dependency updates on boot",
+    )
+    parser.add_argument(
         "--save-opts",
         action="store_true",
         help="Persist provided launch options as defaults in settings.json",
@@ -245,11 +250,12 @@ async def main():
 
     logger.setup_logger(dest)
 
-    await update_archive(
-        dest=dest,
-        force=args.force,
-        dedicated=args.dedicated,
-    )
+    if not args.no_update:
+        await update_archive(
+            dest=dest,
+            force=args.force,
+            dedicated=args.dedicated,
+        )
 
     # Persistence of options
     if args.save_opts:
