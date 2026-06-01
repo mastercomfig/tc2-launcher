@@ -266,6 +266,7 @@
             <h2>Install Folder</h2>
             <button id="open-folder-btn" class="btn btn-secondary" disabled>Browse Install Folder</button>
             <button id="move-folder-btn" class="btn btn-secondary" disabled>Move Install Folder</button>
+            <button id="validate-files-btn" class="btn btn-secondary" disabled>Validate Files</button>
             <h2>Updates</h2>
             <input id="prerelease" type="checkbox"></input>
             <label for="prerelease">Enable Pre-release Updates</label>
@@ -385,6 +386,10 @@
             document.getElementById("prerelease").disabled = launchState !== 0;
         }
 
+        function updateValidateFilesBtnDisabled() {
+            document.getElementById("validate-files-btn").disabled = launchState !== 0 || !available;
+        }
+
         function updateOpenFolderBtnDisabled() {
             document.getElementById("open-folder-btn").disabled = !available;
         }
@@ -428,6 +433,7 @@
             updateLaunchBtnDisabled();
             updateUpdateBtnDisabled();
             updatePrereleaseDisabled();
+            updateValidateFilesBtnDisabled();
             updateOpenFolderBtnDisabled();
             updateMoveFolderBtnDisabled();
         }
@@ -502,6 +508,14 @@
                     window.pywebview.api.check_for_updates();
                 } else {
                     queryWebApi("check_for_updates");
+                }
+            }
+
+            validate_files() {
+                if (window.pywebview) {
+                    window.pywebview.api.validate_files();
+                } else {
+                    queryWebApi("validate_files");
                 }
             }
 
@@ -583,6 +597,14 @@
                 return;
             }
             checkUpdates(true, false);
+        });
+        document.getElementById("validate-files-btn").addEventListener("click", () => {
+            if (document.getElementById("validate-files-btn").disabled) {
+                return;
+            }
+            lastUpdateCheck = Date.now();
+            setLaunchState(-1);
+            api.validate_files();
         });
         document.getElementById("prerelease").addEventListener("change", (event) => {
             if (event.target.checked) {

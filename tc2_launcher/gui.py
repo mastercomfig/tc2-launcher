@@ -123,6 +123,13 @@ class Api:
     def check_for_updates(self):
         run_async_thread(self.check_for_updates_async())
 
+    async def validate_files_async(self):
+        res = await update_archive(force=True)
+        send_eval(f"archiveReady({res});")
+
+    def validate_files(self):
+        run_async_thread(self.validate_files_async())
+
     def open_install_folder(self):
         open_install_folder()
 
@@ -142,15 +149,18 @@ class Api:
             return
 
 
-def find_available_port(start_port: int, max_attempts: int = 100) -> int:
-    for port in range(start_port, start_port + max_attempts):
+DEFAULT_PORT = 48564
+
+
+def find_available_port(max_attempts: int = 100) -> int | None:
+    for port in range(DEFAULT_PORT, DEFAULT_PORT + max_attempts):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 s.bind(("127.0.0.1", port))
                 return port
             except socket.error:
                 continue
-    return start_port
+    return None
 
 
 async def update_and_notify():
@@ -395,6 +405,14 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
         app.add_routes(
             [
                 aiohttp.web.post(
+                    "/api/validate_files",
+                    ApiCallbackHandler(api.validate_files_async),
+                )
+            ]
+        )
+        app.add_routes(
+            [
+                aiohttp.web.post(
                     "/api/open_install_folder",
                     ApiCallbackHandler(api.open_install_folder),
                 )
@@ -403,7 +421,7 @@ async def start_fallback_gui(entry: str, extra_options: str, branch: str):
 
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()
-        port = find_available_port(48564)
+        port = find_available_port() or DEFAULT_PORT
         site = aiohttp.web.TCPSite(runner, "localhost", port)
         await site.start()
         address = f"http://localhost:{port}/entry"
@@ -520,7 +538,7 @@ async def _start_gui_private(
                 icon=str(entry_parent / "favicon.ico"),
                 gui=gui,
                 debug=DEV_INSTANCE,
-                http_port=find_available_port(48564),
+                http_port=find_available_port(),
             )
         except Exception:
             logger.error("Failed to start webview window.")
