@@ -1,5 +1,5 @@
 import sys
 
-VERSION = (1, 0, 19)
+VERSION = (1, 0, 20)
 VERSION_STR = ".".join(map(str, VERSION))
 DEV_INSTANCE = not getattr(sys, "frozen", False)
