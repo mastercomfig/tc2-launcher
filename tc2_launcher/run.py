@@ -1071,7 +1071,14 @@ def open_install_folder(dest: Path | None = None) -> None:
         run_open(str(game_dir))
 
 
-def change_install_folder(new_game_dir: Path):
+def change_install_folder(new_game_dir: Path, dest: Path | None = None):
+    if not dest:
+        dest = default_dest_dir()
+
+    old_game_dir = get_game_dir(dest)
+    if new_game_dir == old_game_dir:
+        return
+
     try:
         # if the directory is a mount point or not empty, create a subdirectory
         if new_game_dir.is_mount() or any(new_game_dir.iterdir()):
@@ -1087,20 +1094,26 @@ def change_install_folder(new_game_dir: Path):
         logger.error(f"Invalid path '{new_game_dir}': {e}")
         return
 
-    old_game_dir = get_game_dir()
-    if new_game_dir == old_game_dir:
-        return
     if old_game_dir.exists() and old_game_dir.is_dir():
         try:
             copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
-            rmtree(old_game_dir)
         except Exception as e:
-            logger.error(f"Failed to move game directory: {e}")
+            logger.error(f"Failed to copy game directory: {e}")
             return
 
-    settings = read_settings()
+        try:
+            rmtree(old_game_dir)
+        except Exception as e:
+            logger.error(f"Failed to remove old game directory: {e}")
+            try:
+                rmtree(new_game_dir)
+            except Exception as undo_e:
+                logger.error(f"Failed to undo copy: {undo_e}")
+            return
+
+    settings = read_settings(dest)
     settings["game_dir"] = str(new_game_dir)
-    write_settings(dest=None, settings=settings)
+    write_settings(dest=dest, settings=settings)
 
 
 def uninstall(reset_settings: bool, dest: Path | None = None) -> bool:
