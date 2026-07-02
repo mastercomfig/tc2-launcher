@@ -700,12 +700,14 @@ def run_non_blocking(
     else:
         if isinstance(cmd, list) and cmd[0] != "nohup":
             cmd.insert(0, "nohup")
-            
+
+        cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
+
         return subprocess.Popen(
             cmd,
             env=new_env,
             cwd=cwd,
-            shell=False,
+            shell=True,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
