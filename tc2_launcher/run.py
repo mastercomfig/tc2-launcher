@@ -670,11 +670,7 @@ def run_open(url: str):
 
 
 def run_blocking(cmd: list[str], cwd: Path | None = None) -> None:
-    if os.name == "nt":
-        subprocess.run(cmd, env=get_safe_env(), cwd=cwd, shell=True)
-    else:
-        cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
-        subprocess.run(cmd, env=get_safe_env(), cwd=cwd, shell=True)
+    subprocess.run(cmd, env=get_safe_env(), cwd=cwd, shell=False)
 
 
 def run_non_blocking(
@@ -702,13 +698,14 @@ def run_non_blocking(
             creationflags=creationflags,
         )
     else:
-        cmd.insert(0, "nohup")
-        cmd = " ".join(cmd) if isinstance(cmd, list) else cmd
+        if isinstance(cmd, list) and cmd[0] != "nohup":
+            cmd.insert(0, "nohup")
+            
         return subprocess.Popen(
             cmd,
             env=new_env,
             cwd=cwd,
-            shell=True,
+            shell=False,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -771,6 +768,7 @@ def launch_game(
     dest: Path | None = None,
     extra_options: list[str] | None = None,
     dedicated: bool = False,
+    url_options: list[str] | None = None,
 ) -> tuple[str | None, bool, subprocess.Popen | None]:
     if not dest:
         dest = default_dest_dir()
@@ -795,6 +793,9 @@ def launch_game(
         extra_options = settings.get("opts")
     if not extra_options or not isinstance(extra_options, list):
         extra_options = []
+        
+    if url_options:
+        extra_options.extend(url_options)
 
     if dedicated:
         default_args += ["-console", "-dedicated"]

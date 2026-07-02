@@ -206,3 +206,59 @@ def get_ssl_context() -> ssl.SSLContext:
         context.load_verify_locations(cafile=certifi.where())
 
     return context
+
+
+def register_url_handler_windows():
+    try:
+        import sys
+        import winreg
+
+        exe_path = sys.executable
+        key_path = r"Software\Classes\comtress"
+
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:comtress Protocol")
+            winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
+
+            with winreg.CreateKey(key, r"shell\open\command") as cmd_key:
+                winreg.SetValueEx(cmd_key, "", 0, winreg.REG_SZ, f'"{exe_path}" "%1"')
+    except Exception as e:
+        logger.error(f"Failed to register URL handler on Windows: {e}")
+
+
+def register_url_handler_linux():
+    try:
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        exe_path = sys.executable
+
+        apps_dir = Path.home() / ".local" / "share" / "applications"
+        apps_dir.mkdir(parents=True, exist_ok=True)
+
+        desktop_file = apps_dir / "tc2-comtress-url-handler.desktop"
+
+        content = f"""[Desktop Entry]
+Name=Team Comtress URL Handler
+Exec="{exe_path}" %u
+Type=Application
+Terminal=false
+MimeType=x-scheme-handler/comtress;
+NoDisplay=true
+"""
+        with open(desktop_file, "w") as f:
+            f.write(content)
+
+        subprocess.run(["update-desktop-database", str(apps_dir)], capture_output=True)
+    except Exception as e:
+        logger.error(f"Failed to register URL handler on Linux: {e}")
+
+
+def register_url_handler():
+    if DEV_INSTANCE:
+        return
+    if os.name == "nt":
+        register_url_handler_windows()
+    elif os.name == "posix":
+        register_url_handler_linux()

@@ -9,6 +9,8 @@ import traceback
 from pathlib import Path
 from shutil import copyfile
 from time import sleep
+import urllib.parse
+import re
 from timeit import default_timer as timer
 from typing import Optional
 
@@ -16,6 +18,7 @@ if os.name == "posix":
     import stat
 
 from tc2_launcher import logger
+from tc2_launcher.env import register_url_handler
 from tc2_launcher.gui import start_gui, start_gui_separate
 from tc2_launcher.run import (
     clean_self_update,
@@ -70,8 +73,66 @@ def close_updater_gui():
         updater_thread_queue.put("close")
 
 
+def parse_url_handler(url: str) -> Optional[list[str]]:
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme != "comtress":
+            return None
+        
+        if parsed.netloc == "open":
+            return []
+            
+        if parsed.netloc == "connect":
+            parts = parsed.path.strip("/").split("/")
+            if len(parts) >= 1 and parts[0]:
+                host_port = parts[0].split(":")
+                host = host_port[0]
+                port = host_port[1] if len(host_port) > 1 else None
+                password = urllib.parse.unquote(parts[1]) if len(parts) > 1 else None
+                
+                # DNS name support: allow alphanumeric, dots, and hyphens
+                if not re.match(r"^[a-zA-Z0-9.-]+$", host):
+                    return None
+                
+                if port is not None:
+                    if not port.isdigit() or not (1 <= int(port) <= 65535):
+                        return None
+                
+                port_str = f":{port}" if port else ""
+                opts = ["+connect", f"{host}{port_str}"]
+                
+                if password:
+                    # Sanitize password to prevent engine injection (quotes, newlines, and semicolons)
+                    password = password.replace('"', '').replace('\n', '').replace('\r', '').replace(';', '')
+                    if password.lstrip().startswith('+') or password.lstrip().startswith('-'):
+                        return None
+                    opts.extend(["+password", password])
+                    
+                return opts
+    except Exception:
+        pass
+    return None
+
+
 async def main():
     global should_launch_updater
+    
+    register_url_handler()
+    
+    url_opts = None
+    url_arg_index = -1
+    for i, arg in enumerate(sys.argv):
+        if arg.startswith("comtress://"):
+            url_arg_index = i
+            break
+            
+    if url_arg_index != -1:
+        url_arg = sys.argv.pop(url_arg_index)
+        url_opts = parse_url_handler(url_arg)
+        if url_opts is not None:
+            if "--launch" not in sys.argv:
+                sys.argv.append("--launch")
+
     launch_gui = False
     if len(sys.argv) >= 3 and sys.argv[1] == "--replace":
         launch_gui = len(sys.argv) == 3
@@ -265,7 +326,7 @@ async def main():
         if args.dedicated:
             while True:
                 err, _should_print, proc = launch_game(
-                    dest=dest, extra_options=args.opts, dedicated=True
+                    dest=dest, extra_options=args.opts, dedicated=True, url_options=url_opts
                 )
                 if err:
                     logger.error(err)
@@ -309,7 +370,7 @@ async def main():
                         dedicated=True,
                     )
         else:
-            err, should_print, _proc = launch_game(dest=dest, extra_options=args.opts)
+            err, should_print, _proc = launch_game(dest=dest, extra_options=args.opts, url_options=url_opts)
             if err and should_print:
                 logger.error(err)
 
