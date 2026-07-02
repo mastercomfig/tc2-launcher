@@ -117,14 +117,22 @@ class Api:
             get_window().state.branch = prerelease
 
     async def check_for_updates_async(self):
-        res = await update_archive()
+        try:
+            res = await update_archive()
+        except Exception as e:
+            logger.error(f"check_for_updates failed: {e}")
+            res = 1
         send_eval(f"archiveReady({res});")
 
     def check_for_updates(self):
         run_async_thread(self.check_for_updates_async())
 
     async def validate_files_async(self):
-        res = await update_archive(force=True)
+        try:
+            res = await update_archive(force=True)
+        except Exception as e:
+            logger.error(f"validate_files failed: {e}")
+            res = 1
         send_eval(f"archiveReady({res});")
 
     def validate_files(self):
@@ -164,7 +172,11 @@ def find_available_port(max_attempts: int = 100) -> int | None:
 
 
 async def update_and_notify():
-    res = await update_archive()
+    try:
+        res = await update_archive()
+    except Exception as e:
+        logger.error(f"update_and_notify failed: {e}")
+        res = 1
     send_eval(f"archiveReady({res});")
 
 
