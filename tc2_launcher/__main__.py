@@ -74,6 +74,9 @@ def close_updater_gui():
 
 
 def parse_url_handler(url: str) -> Optional[list[str]]:
+    if os.name == "posix":
+        # linux is not secure yet
+        return None
     try:
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme != "comtress":
