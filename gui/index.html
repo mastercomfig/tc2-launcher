@@ -613,6 +613,7 @@
                 api.set_prerelease("");
             }
             document.getElementById("update-btn").click();
+            tryLauncherFeed();
         });
 
         function formatVersion(versionStr) {
@@ -624,14 +625,13 @@
 
         let pumpTimeout = null;
 
-        const launcherFeed = "https://teamcomtress.com/launcher_feed/";
-
         let shouldError = false;
 
         function tryLauncherFeed() {
-            fetch(launcherFeed).then((r) => { if (r.ok) { return r; } else { throw new Error(`${r.status}${r.statusText ? ` ${r.statusText}` : ""}`); } }).then(() => {
+            const feedUrl = document.getElementById("prerelease").checked ? "https://teamcomtress.com/launcher_feed_prerelease/" : "https://teamcomtress.com/launcher_feed/";
+            fetch(feedUrl).then((r) => { if (r.ok) { return r; } else { throw new Error(`${r.status}${r.statusText ? ` ${r.statusText}` : ""}`); } }).then(() => {
                 // double fetch, but what can we do?
-                document.getElementById("news-frame").src = launcherFeed;
+                document.getElementById("news-frame").src = feedUrl;
                 document.getElementById("news-status").style.display = "none";
                 document.getElementById("news-frame").style.display = "block";
             }).catch(err => {
