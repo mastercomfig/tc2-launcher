@@ -80,7 +80,9 @@ def parse_url_handler(url: str) -> Optional[list[str]]:
             return None
         
         if parsed.netloc == "open":
-            return []
+            if parsed.path.strip("/") == "game":
+                return []
+            return None
             
         if parsed.netloc == "connect":
             parts = parsed.path.strip("/").split("/")
