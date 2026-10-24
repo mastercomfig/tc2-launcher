@@ -925,6 +925,13 @@ def launch_game(
         if gpu_info and gpu_info["vendor_id"] == NVIDIA_VENDOR_ID:
             vk_supported = False
 
+    wrapper_args = []
+    # split off %command% wrapper, like steam does
+    if "%command%" in extra_options:
+        placeholder_index = extra_options.index("%command%")
+        wrapper_args = extra_options[:placeholder_index]
+        extra_options = extra_options[placeholder_index + 1:]
+
     extra_options_set = set(extra_options)
     banned_opts = []
 
@@ -979,6 +986,8 @@ def launch_game(
 
     # Launch the game
     logger.info(f"Launching: {' '.join(cmd)}")
+    if wrapper_args:
+        logger.info(f"With Wrapper(s): {' '.join(wrapper_args)}")
     env: dict[str, str] = {}
     if os.name == "posix":
         if not dedicated:
@@ -1010,6 +1019,9 @@ def launch_game(
         else:
             env[SLR3_ENV_NAME] = str(slr_path)
 
+    # add split wrapper so it runs before slr
+    if wrapper_args:
+        cmd = wrapper_args + cmd
     original_cwd = os.getcwd()
     proc = None
     try:
