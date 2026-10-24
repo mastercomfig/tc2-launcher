@@ -4,4 +4,4 @@ set PYTHONOPTIMIZE=1
 set PYTHONHASHSEED=0
 set PYI_STATIC_ZLIB=1
 set OBJECT_MODE=64
-pyinstaller --clean build-windows.spec %*
+pyinstaller --noconfirm --clean build-windows.spec %*
