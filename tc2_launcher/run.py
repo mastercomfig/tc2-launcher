@@ -168,7 +168,7 @@ def default_dest_dir() -> Path:
 
 github_api_headers = {
     "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
+    "X-GitHub-Api-Version": "2026-03-10",
     "User-Agent": "TC2Launcher",
 }
 
@@ -237,7 +237,10 @@ async def update_self() -> bool:
         else:
             connector = None
         async with aiohttp.ClientSession(
-            headers=github_api_headers, connector=connector
+            headers=github_api_headers,
+            connector=connector,
+            max_line_size=65536,
+            max_field_size=65536,
         ) as session:
             release = await _get_latest_release(None, LAUNCHER_REPO, session)
             tag = release.get("tag_name", "").lstrip("v")
@@ -273,7 +276,10 @@ async def update_self() -> bool:
         else:
             connector = None
         async with aiohttp.ClientSession(
-            headers=github_api_headers, connector=connector
+            headers=github_api_headers,
+            connector=connector,
+            max_line_size=65536,
+            max_field_size=65536,
         ) as session:
             await _download(download_url, download_path, session)
     except Exception as e:
@@ -517,7 +523,10 @@ async def update_archive(
         else:
             connector = None
         async with aiohttp.ClientSession(
-            headers=github_api_headers, connector=connector
+            headers=github_api_headers,
+            connector=connector,
+            max_line_size=65536,
+            max_field_size=65536,
         ) as session:
             release = await _get_latest_release(dest, TC2_REPO, session)
             tag = release.get("tag_name")
@@ -579,7 +588,10 @@ async def update_archive(
             else:
                 connector = None
             async with aiohttp.ClientSession(
-                headers=github_api_headers, connector=connector
+                headers=github_api_headers,
+                connector=connector,
+                max_line_size=65536,
+                max_field_size=65536,
             ) as session:
                 await _download(download_url, asset_path, session)
         except Exception as e:
