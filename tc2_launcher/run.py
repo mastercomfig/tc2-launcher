@@ -173,6 +173,17 @@ github_api_headers = {
 }
 
 
+def _create_http_session() -> aiohttp.ClientSession:
+    ssl_ctx = get_ssl_context()
+    connector = aiohttp.TCPConnector(ssl=ssl_ctx) if ssl_ctx else None
+    return aiohttp.ClientSession(
+        headers=github_api_headers,
+        connector=connector,
+        max_line_size=65536,
+        max_field_size=65536,
+    )
+
+
 def run_async_thread(task: Coroutine[Any, Any, Any]):
     # TODO: use run_coroutine_threadsafe
     def run_task():
@@ -287,17 +298,7 @@ async def update_self() -> bool:
         asset_filter = "-linux"
 
     try:
-        ssl = get_ssl_context()
-        if ssl:
-            connector = aiohttp.TCPConnector(ssl=get_ssl_context())
-        else:
-            connector = None
-        async with aiohttp.ClientSession(
-            headers=github_api_headers,
-            connector=connector,
-            max_line_size=65536,
-            max_field_size=65536,
-        ) as session:
+        async with _create_http_session() as session:
             release = await _get_latest_release(
                 None, LAUNCHER_REPO, asset_filter, session
             )
@@ -329,17 +330,7 @@ async def update_self() -> bool:
     download_path = dest_dir / "update" / tag / asset_name
     logger.info("Downloading self-update...")
     try:
-        ssl = get_ssl_context()
-        if ssl:
-            connector = aiohttp.TCPConnector(ssl=get_ssl_context())
-        else:
-            connector = None
-        async with aiohttp.ClientSession(
-            headers=github_api_headers,
-            connector=connector,
-            max_line_size=65536,
-            max_field_size=65536,
-        ) as session:
+        async with _create_http_session() as session:
             await _download(download_url, download_path, session)
     except Exception as e:
         logger.error(f"Failed to download self-update: {e}")
@@ -581,17 +572,7 @@ async def update_archive(
         asset_filter = "game-linux.zip"
 
     try:
-        ssl = get_ssl_context()
-        if ssl:
-            connector = aiohttp.TCPConnector(ssl=get_ssl_context())
-        else:
-            connector = None
-        async with aiohttp.ClientSession(
-            headers=github_api_headers,
-            connector=connector,
-            max_line_size=65536,
-            max_field_size=65536,
-        ) as session:
+        async with _create_http_session() as session:
             release = await _get_latest_release(dest, TC2_REPO, asset_filter, session)
             tag = release.get("tag_name")
             if not tag:
@@ -641,17 +622,7 @@ async def update_archive(
 
         logger.info(f"Downloading latest asset to {asset_path}...")
         try:
-            ssl = get_ssl_context()
-            if ssl:
-                connector = aiohttp.TCPConnector(ssl=get_ssl_context())
-            else:
-                connector = None
-            async with aiohttp.ClientSession(
-                headers=github_api_headers,
-                connector=connector,
-                max_line_size=65536,
-                max_field_size=65536,
-            ) as session:
+            async with _create_http_session() as session:
                 await _download(download_url, asset_path, session)
         except Exception as e:
             logger.error(f"Failed to download asset: {e}")
@@ -787,7 +758,9 @@ def run_non_blocking(
         )
 
 
+_game_dir_lock = threading.RLock()
 _has_randomized_this_session = False
+_logged_defer_migration = False
 MIN_INSTALL_PATH_LENGTH = 24
 
 
@@ -802,6 +775,44 @@ def is_path_too_short(path: Path) -> bool:
 def _is_legacy_tc2_dir_name(path: Path) -> bool:
     folder_name = path.name.lower()
     return folder_name == "tc2" or folder_name.startswith("tc2_")
+
+
+def _dir_has_entries(path: Path) -> tuple[bool, bool]:
+    try:
+        return any(path.iterdir()), False
+    except OSError:
+        return False, True
+
+
+def _can_write_dir(path: Path) -> bool:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        if not path.is_dir():
+            return False
+        with tempfile.NamedTemporaryFile(dir=path, prefix=".tc2_write_", delete=True):
+            pass
+        return True
+    except OSError:
+        return False
+
+
+def _is_game_running_in_dir(directory: Path) -> bool:
+    game_exe_name = _get_game_exe_name(running_process=True).lower()
+    try:
+        resolved_dir = directory.resolve()
+    except OSError:
+        resolved_dir = directory
+    for p in psutil.process_iter(["name", "exe"]):
+        try:
+            name = p.info.get("name")
+            if not name or name.lower() != game_exe_name:
+                continue
+            exe = p.info.get("exe")
+            if exe and Path(exe).resolve().is_relative_to(resolved_dir):
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+            continue
+    return False
 
 
 def _get_padded_game_dir(path: Path) -> Path:
@@ -849,101 +860,216 @@ def _rename_game_dir(old_path: Path, new_path: Path) -> None:
                 pass
             raise
     else:
-        if new_path.exists() and new_path.is_dir() and not any(new_path.iterdir()):
+        has_entries, unreadable = (
+            _dir_has_entries(new_path)
+            if new_path.exists() and new_path.is_dir()
+            else (False, False)
+        )
+        if new_path.exists() and new_path.is_dir() and not has_entries and not unreadable:
             new_path.rmdir()
         new_path.parent.mkdir(parents=True, exist_ok=True)
         old_path.rename(new_path)
 
 
+def _copy_migrate_game_dir(old_path: Path, new_path: Path) -> None:
+    old_path = old_path.resolve()
+    new_path = new_path.resolve()
+    if old_path == new_path:
+        return
+
+    if new_path.is_relative_to(old_path):
+        import uuid
+
+        temp_path = old_path.parent / f"tc2_migrate_{uuid.uuid4().hex[:8]}"
+        while temp_path.exists():
+            temp_path = old_path.parent / f"tc2_migrate_{uuid.uuid4().hex[:8]}"
+        copytree(old_path, temp_path, dirs_exist_ok=True)
+        try:
+            for item in list(old_path.iterdir()):
+                try:
+                    if item.is_dir() and not item.is_symlink():
+                        rmtree(item, ignore_errors=True)
+                    else:
+                        item.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            new_path.mkdir(parents=True, exist_ok=True)
+            copytree(temp_path, new_path, dirs_exist_ok=True)
+        finally:
+            rmtree(temp_path, ignore_errors=True)
+    else:
+        target_was_empty = not new_path.exists() or not _dir_has_entries(new_path)[0]
+        try:
+            new_path.mkdir(parents=True, exist_ok=True)
+            copytree(old_path, new_path, dirs_exist_ok=True)
+        except Exception:
+            if target_was_empty:
+                rmtree(new_path, ignore_errors=True)
+            raise
+        rmtree(old_path, ignore_errors=True)
+
+
 def get_game_dir(dest: Path | None = None) -> Path:
     global _has_randomized_this_session
-    settings = read_settings(dest)
+    global _logged_defer_migration
 
-    user_game_dir = settings.get("game_dir")
+    with _game_dir_lock:
+        default_dest = default_dest_dir()
+        default_game_dest = default_dest / "game"
+        is_default_dest = not dest or dest == default_dest
 
-    if os.name == "nt" and not _has_randomized_this_session:
-        is_unset = not user_game_dir
-        is_default_tc2 = False
-        is_too_short = False
+        settings = read_settings(dest)
+        user_game_dir = settings.get("game_dir")
+
+        if os.name == "nt" and not _has_randomized_this_session:
+            is_unset = not user_game_dir
+            is_default_tc2 = False
+            is_too_short = False
+            if user_game_dir:
+                try:
+                    resolved_user_dir = Path(user_game_dir).resolve()
+                    if _is_legacy_tc2_dir_name(resolved_user_dir):
+                        is_default_tc2 = True
+                    elif is_path_too_short(resolved_user_dir):
+                        is_too_short = True
+                except Exception:
+                    pass
+
+            drive = Path.home().drive
+            legacy_root_tc2 = Path(f"{drive}\\") / "tc2"
+            should_init_unset = is_unset and is_default_dest and (
+                legacy_root_tc2.exists() or not default_game_dest.exists()
+            )
+
+            if should_init_unset or is_default_tc2 or is_too_short:
+                if is_unset:
+                    old_path = legacy_root_tc2
+                    new_path = Path(f"{drive}\\") / "Games" / "Team Comtress 2"
+                else:
+                    old_path = Path(user_game_dir).resolve()
+                    new_path = old_path.parent / "Team Comtress 2"
+                    if is_path_too_short(new_path):
+                        new_path = old_path.parent / "Games" / "Team Comtress 2"
+
+                rename_succeeded = False
+                deferred = False
+
+                if old_path.exists() and old_path.is_dir() and not old_path.is_mount():
+                    old_has_entries, old_unreadable = _dir_has_entries(old_path)
+                    if not old_has_entries:
+                        if not old_unreadable:
+                            try:
+                                old_path.rmdir()
+                            except OSError:
+                                pass
+                        if not _can_write_dir(new_path):
+                            new_path = default_game_dest
+                        rename_succeeded = True
+                    elif _is_game_running_in_dir(old_path):
+                        if not _logged_defer_migration:
+                            logger.info(
+                                f"Deferring game directory migration while game is running in {old_path}"
+                            )
+                            _logged_defer_migration = True
+                        deferred = True
+                        user_game_dir = str(old_path)
+                    else:
+                        if (
+                            new_path.exists()
+                            and not new_path.is_relative_to(old_path)
+                            and (not new_path.is_dir() or _dir_has_entries(new_path)[0])
+                        ):
+                            new_path = _get_padded_game_dir(new_path)
+                        try:
+                            _rename_game_dir(old_path, new_path)
+                            logger.info(
+                                f"Renamed default game directory from {old_path} to {new_path}"
+                            )
+                            rename_succeeded = True
+                        except Exception as rename_err:
+                            copy_target = new_path
+                            if copy_target.is_relative_to(old_path):
+                                copy_target = _get_padded_game_dir(old_path)
+                            target_existed = (
+                                copy_target.exists()
+                                and _dir_has_entries(copy_target)[0]
+                            )
+                            if not _can_write_dir(copy_target):
+                                if not target_existed:
+                                    rmtree(copy_target, ignore_errors=True)
+                                copy_target = default_game_dest
+                                if (
+                                    copy_target.exists()
+                                    and _dir_has_entries(copy_target)[0]
+                                ):
+                                    copy_target = _get_padded_game_dir(copy_target)
+                            try:
+                                _copy_migrate_game_dir(old_path, copy_target)
+                                new_path = copy_target
+                                logger.info(
+                                    f"Migrated default game directory from {old_path} to {new_path}"
+                                )
+                                rename_succeeded = True
+                            except Exception as copy_err:
+                                logger.error(
+                                    f"Failed to rename default game directory from {old_path} to {new_path}: {rename_err} (copy fallback failed: {copy_err})"
+                                )
+                                if (
+                                    not (old_path / _get_game_exe_name()).exists()
+                                    and not _can_write_dir(old_path)
+                                    and _can_write_dir(copy_target)
+                                ):
+                                    new_path = copy_target
+                                    rename_succeeded = True
+                else:
+                    if not _can_write_dir(new_path):
+                        new_path = default_game_dest
+                    rename_succeeded = True
+
+                if rename_succeeded:
+                    settings["game_dir"] = str(new_path)
+                    try:
+                        write_settings(dest, settings)
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to write settings with migrated game directory: {e}"
+                        )
+                    user_game_dir = str(new_path)
+                    _has_randomized_this_session = True
+                    _logged_defer_migration = False
+                elif not deferred:
+                    user_game_dir = str(old_path)
+                    _has_randomized_this_session = True
+            else:
+                _has_randomized_this_session = True
+
         if user_game_dir:
             try:
-                resolved_user_dir = Path(user_game_dir).resolve()
-                if _is_legacy_tc2_dir_name(resolved_user_dir):
-                    is_default_tc2 = True
-                elif is_path_too_short(resolved_user_dir):
-                    is_too_short = True
-            except Exception:
-                pass
+                resolved_dest = Path(user_game_dir).resolve()
+                resolved_dest.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                logger.error(
+                    f"Failed to use specified game directory '{user_game_dir}': {e}"
+                )
+                resolved_dest = None
+            if resolved_dest and resolved_dest.exists() and resolved_dest.is_dir():
+                return resolved_dest
 
-        if is_unset or is_default_tc2 or is_too_short:
-            drive = Path.home().drive
-
-            if is_unset:
-                old_path = Path(f"{drive}\\") / "tc2"
-                new_path = Path(f"{drive}\\") / "Games" / "Team Comtress 2"
-            else:
-                old_path = Path(user_game_dir).resolve()
-                new_path = old_path.parent / "Team Comtress 2"
-                if is_path_too_short(new_path):
-                    new_path = old_path.parent / "Games" / "Team Comtress 2"
-
-            rename_succeeded = False
-            if old_path.exists() and old_path.is_dir() and not old_path.is_mount():
-                if (
-                    new_path.exists()
-                    and not new_path.is_relative_to(old_path)
-                    and (not new_path.is_dir() or any(new_path.iterdir()))
-                ):
-                    new_path = _get_padded_game_dir(new_path)
-                try:
-                    _rename_game_dir(old_path, new_path)
-                    logger.info(
-                        f"Renamed default game directory from {old_path} to {new_path}"
-                    )
-                    rename_succeeded = True
-                except Exception as e:
-                    logger.error(
-                        f"Failed to rename default game directory from {old_path} to {new_path}: {e}"
-                    )
-            else:
-                rename_succeeded = True
-
-            if rename_succeeded:
-                settings["game_dir"] = str(new_path)
-                try:
-                    write_settings(dest, settings)
-                except Exception as e:
-                    logger.error(
-                        f"Failed to write settings with randomized game directory: {e}"
-                    )
-                user_game_dir = str(new_path)
-                _has_randomized_this_session = True
-            else:
-                user_game_dir = str(old_path)
-
-    if user_game_dir:
-        try:
-            resolved_dest = Path(user_game_dir).resolve()
-            resolved_dest.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.error(
-                f"Failed to use specified game directory '{user_game_dir}': {e}"
-            )
-            resolved_dest = None
-        if resolved_dest and resolved_dest.exists() and resolved_dest.is_dir():
-            return resolved_dest
-
-    default_dest = default_dest_dir()
-    default_game_dest = default_dest / "game"
-    if not dest or dest == default_dest:
-        if os.name == "nt" and not default_game_dest.exists():
-            drive = Path.home().drive
-            dest = Path(f"{drive}\\") / "Games" / "Team Comtress 2"
-            return dest
-        else:
+        if is_default_dest:
+            if os.name == "nt" and not default_game_dest.exists():
+                drive = Path.home().drive
+                win_default = Path(f"{drive}\\") / "Games" / "Team Comtress 2"
+                if _can_write_dir(win_default):
+                    return win_default
+            default_game_dest.mkdir(parents=True, exist_ok=True)
             return default_game_dest
 
-    return dest / "game"
+        custom_game_dest = dest / "game"
+        if os.name == "nt" and is_path_too_short(custom_game_dest):
+            custom_game_dest = dest / "Team Comtress 2"
+            if is_path_too_short(custom_game_dest):
+                custom_game_dest = _get_padded_game_dir(custom_game_dest)
+        return custom_game_dest
 
 
 def _get_game_exe_name(running_process: bool = False, dedicated: bool = False) -> str:
@@ -1280,60 +1406,11 @@ def open_install_folder(dest: Path | None = None) -> None:
 
 def change_install_folder(new_game_dir: Path, dest: Path | None = None):
     global _has_randomized_this_session
-    if not dest:
-        dest = default_dest_dir()
+    with _game_dir_lock:
+        if not dest:
+            dest = default_dest_dir()
 
-    old_game_dir = get_game_dir(dest)
-    new_game_dir = new_game_dir.resolve()
-    if new_game_dir == old_game_dir:
-        logger.error(f"Cannot move game directory to itself: {new_game_dir}")
-        return
-
-    if new_game_dir.is_relative_to(old_game_dir):
-        logger.error(
-            f"Cannot move game directory to a subdirectory of itself: {new_game_dir}"
-        )
-        return
-
-    selected_dir = new_game_dir
-    selected_was_empty = False
-    was_empty_or_missing = True
-    did_randomize = False
-
-    try:
-        exe_name = "tc2_win64.exe" if os.name == "nt" else "tc2_linux64"
-
-        # Check if the directory already contains the game executable
-        is_game_dir = False
-        if not new_game_dir.is_mount() and (new_game_dir / exe_name).exists():
-            is_game_dir = True
-        elif (
-            new_game_dir.exists()
-            and new_game_dir.is_dir()
-            and not new_game_dir.is_mount()
-            and not any(new_game_dir.iterdir())
-        ):
-            selected_was_empty = True
-
-        source_game_dir = new_game_dir
-
-        # if the directory is a mount point or not empty (and not already a game dir), create a subdirectory
-        if new_game_dir.is_mount() or (
-            new_game_dir.exists() and any(new_game_dir.iterdir()) and not is_game_dir
-        ):
-            new_game_dir = new_game_dir / "Team Comtress 2"
-            if os.name == "nt" and is_path_too_short(new_game_dir):
-                new_game_dir = new_game_dir.parent / "Games" / "Team Comtress 2"
-                did_randomize = True
-            if (new_game_dir / exe_name).exists():
-                is_game_dir = True
-                source_game_dir = new_game_dir
-
-        if os.name == "nt":
-            if is_path_too_short(new_game_dir) or _is_legacy_tc2_dir_name(new_game_dir):
-                new_game_dir = _get_padded_game_dir(new_game_dir)
-                did_randomize = True
-
+        old_game_dir = get_game_dir(dest)
         new_game_dir = new_game_dir.resolve()
         if new_game_dir == old_game_dir:
             logger.error(f"Cannot move game directory to itself: {new_game_dir}")
@@ -1345,69 +1422,120 @@ def change_install_folder(new_game_dir: Path, dest: Path | None = None):
             )
             return
 
-        if is_game_dir and new_game_dir != source_game_dir:
-            test_path = source_game_dir / "test.txt"
-            test_path.touch()
-            test_path.unlink()
-            _rename_game_dir(source_game_dir, new_game_dir)
-            logger.info(
-                f"Renamed game directory from {source_game_dir} to {new_game_dir}"
-            )
-            if not new_game_dir.exists() or not new_game_dir.is_dir():
-                raise Exception("Failed to rename directory")
-        else:
-            was_empty_or_missing = not new_game_dir.exists() or not any(
-                new_game_dir.iterdir()
-            )
-            new_game_dir.mkdir(parents=True, exist_ok=True)
-            if not new_game_dir.exists() or not new_game_dir.is_dir():
-                raise Exception("Failed to create directory")
-            test_path = new_game_dir / "test.txt"
-            test_path.touch()
-            test_path.unlink()
-    except Exception as e:
-        logger.error(f"Invalid path '{new_game_dir}': {e}")
-        return
-
-    if not is_game_dir and old_game_dir.exists() and old_game_dir.is_dir():
-        try:
-            copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
-        except Exception as e:
-            logger.error(f"Failed to copy game directory: {e}")
-            if was_empty_or_missing:
-                try:
-                    rmtree(new_game_dir)
-                except Exception:
-                    pass
+        if os.name == "nt" and old_game_dir.exists() and _is_game_running_in_dir(old_game_dir):
+            logger.error("Cannot move game directory while the game is running.")
             return
 
+        selected_dir = new_game_dir
+        selected_was_empty = False
+        was_empty_or_missing = True
+        did_randomize = False
+
         try:
-            rmtree(old_game_dir)
-        except Exception as e:
-            logger.error(f"Failed to remove old game directory: {e}")
-            if was_empty_or_missing:
+            exe_name = "tc2_win64.exe" if os.name == "nt" else "tc2_linux64"
+
+            # Check if the directory already contains the game executable
+            is_game_dir = False
+            if not new_game_dir.is_mount() and (new_game_dir / exe_name).exists():
+                is_game_dir = True
+            elif (
+                new_game_dir.exists()
+                and new_game_dir.is_dir()
+                and not new_game_dir.is_mount()
+                and not _dir_has_entries(new_game_dir)[0]
+            ):
+                selected_was_empty = True
+
+            source_game_dir = new_game_dir
+
+            # if the directory is a mount point or not empty (and not already a game dir), create a subdirectory
+            if new_game_dir.is_mount() or (
+                new_game_dir.exists()
+                and _dir_has_entries(new_game_dir)[0]
+                and not is_game_dir
+            ):
+                new_game_dir = new_game_dir / "Team Comtress 2"
+                if os.name == "nt" and is_path_too_short(new_game_dir):
+                    new_game_dir = new_game_dir.parent / "Games" / "Team Comtress 2"
+                    did_randomize = True
+                if (new_game_dir / exe_name).exists():
+                    is_game_dir = True
+                    source_game_dir = new_game_dir
+
+            if os.name == "nt":
+                if is_path_too_short(new_game_dir) or _is_legacy_tc2_dir_name(
+                    new_game_dir
+                ):
+                    new_game_dir = _get_padded_game_dir(new_game_dir)
+                    did_randomize = True
+
+            new_game_dir = new_game_dir.resolve()
+            if new_game_dir == old_game_dir:
+                logger.error(f"Cannot move game directory to itself: {new_game_dir}")
+                return
+
+            if new_game_dir.is_relative_to(old_game_dir):
+                logger.error(
+                    f"Cannot move game directory to a subdirectory of itself: {new_game_dir}"
+                )
+                return
+
+            if is_game_dir and new_game_dir != source_game_dir:
                 try:
-                    rmtree(new_game_dir)
-                except Exception as undo_e:
-                    logger.error(f"Failed to undo copy: {undo_e}")
+                    _rename_game_dir(source_game_dir, new_game_dir)
+                    logger.info(
+                        f"Renamed game directory from {source_game_dir} to {new_game_dir}"
+                    )
+                except OSError:
+                    _copy_migrate_game_dir(source_game_dir, new_game_dir)
+                    logger.info(
+                        f"Migrated game directory from {source_game_dir} to {new_game_dir}"
+                    )
+                if not new_game_dir.exists() or not new_game_dir.is_dir():
+                    raise Exception("Failed to rename directory")
+            else:
+                was_empty_or_missing = (
+                    not new_game_dir.exists() or not _dir_has_entries(new_game_dir)[0]
+                )
+                if not _can_write_dir(new_game_dir):
+                    raise PermissionError(f"Directory is not writable: {new_game_dir}")
+        except Exception as e:
+            logger.error(f"Invalid path '{new_game_dir}': {e}")
             return
 
-    if (
-        selected_was_empty
-        and selected_dir != new_game_dir
-        and not new_game_dir.is_relative_to(selected_dir)
-    ):
-        try:
-            selected_dir.rmdir()
-        except Exception:
-            pass
+        if not is_game_dir and old_game_dir.exists() and old_game_dir.is_dir():
+            try:
+                copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
+            except Exception as e:
+                logger.error(f"Failed to copy game directory: {e}")
+                if was_empty_or_missing:
+                    rmtree(new_game_dir, ignore_errors=True)
+                return
 
-    if did_randomize:
-        _has_randomized_this_session = True
+            try:
+                rmtree(old_game_dir)
+            except Exception as e:
+                logger.warning(
+                    f"Copied game directory to {new_game_dir}, could not fully remove old directory {old_game_dir}: {e}"
+                )
+                rmtree(old_game_dir, ignore_errors=True)
 
-    settings = read_settings(dest)
-    settings["game_dir"] = str(new_game_dir)
-    write_settings(dest=dest, settings=settings)
+        if (
+            selected_was_empty
+            and selected_dir != new_game_dir
+            and not new_game_dir.is_relative_to(selected_dir)
+        ):
+            try:
+                selected_dir.rmdir()
+            except Exception:
+                pass
+
+        if did_randomize:
+            _has_randomized_this_session = True
+
+        settings = read_settings(dest)
+        settings["game_dir"] = str(new_game_dir)
+        write_settings(dest=dest, settings=settings)
 
 
 def uninstall(reset_settings: bool, dest: Path | None = None) -> bool:

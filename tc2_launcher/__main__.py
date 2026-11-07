@@ -121,16 +121,65 @@ def parse_url_handler(url: str) -> Optional[list[str]]:
 
 async def main():
     global should_launch_updater
-    
-    register_url_handler()
-    
+
+    opts_idx = (
+        sys.argv.index("--opts", 1) if "--opts" in sys.argv[1:] else len(sys.argv)
+    )
+    launcher_args = sys.argv[1:opts_idx]
+
+    # Handle hidden info flags early before URL registration or self-update
+    if "--vulkan-info" in launcher_args:
+        logger.setup_silent_logger()
+        import json
+
+        from tc2_launcher.hardware import _get_vulkan_info_internal
+
+        is_supported, gpu_info, error_msg = _get_vulkan_info_internal()
+        print(
+            json.dumps(
+                {
+                    "is_supported": is_supported,
+                    "gpu_info": gpu_info,
+                    "error_msg": error_msg,
+                }
+            )
+        )
+        return
+    if "--dx-info" in launcher_args:
+        logger.setup_silent_logger()
+        import json
+
+        from tc2_launcher.hardware import get_dx_info
+
+        is_supported, gpu_info, error_msg = get_dx_info()
+        print(
+            json.dumps(
+                {
+                    "is_supported": is_supported,
+                    "gpu_info": gpu_info,
+                    "error_msg": error_msg,
+                }
+            )
+        )
+        return
+
+    is_help = "-h" in launcher_args or "--help" in launcher_args
+    has_custom_dest = any(
+        arg == "--dest" or arg.startswith("--dest=") for arg in launcher_args
+    )
+    if not is_help and not has_custom_dest:
+        logger.setup_logger(default_dest_dir())
+
+    if not is_help:
+        register_url_handler()
+
     url_opts = None
     url_arg_index = -1
     for i, arg in enumerate(sys.argv):
         if arg.startswith("comtress://"):
             url_arg_index = i
             break
-            
+
     if url_arg_index != -1:
         url_arg = sys.argv.pop(url_arg_index)
         url_opts = parse_url_handler(url_arg)
@@ -141,10 +190,12 @@ async def main():
     launch_gui = False
     if len(sys.argv) >= 3 and sys.argv[1] == "--replace":
         launch_gui = len(sys.argv) == 3
+        replace_target = sys.argv[2]
+        del sys.argv[1:3]
 
         # Replacement mode after self-update
         try:
-            original_path = Path(sys.argv[2]).resolve()
+            original_path = Path(replace_target).resolve()
             if original_path.exists() and original_path.is_file():
                 current_path = Path(sys.argv[0]).resolve()
                 # wait for the original process to exit
@@ -177,7 +228,7 @@ async def main():
                 logger.info("Self-update applied successfully.")
         except Exception as e:
             logger.error(f"Failed to apply self-update: {e}")
-    else:
+    elif not is_help:
         launch_gui = len(sys.argv) == 1
         if launch_gui:
             start_updater_gui()
@@ -208,44 +259,6 @@ async def main():
         action="store_true",
         help=argparse.SUPPRESS,
     )
-
-    # Handle hidden info flags early
-    temp_args, _ = parser.parse_known_args()
-    if temp_args.vulkan_info:
-        logger.setup_silent_logger()
-        import json
-
-        from tc2_launcher.hardware import _get_vulkan_info_internal
-
-        is_supported, gpu_info, error_msg = _get_vulkan_info_internal()
-        print(
-            json.dumps(
-                {
-                    "is_supported": is_supported,
-                    "gpu_info": gpu_info,
-                    "error_msg": error_msg,
-                }
-            )
-        )
-        return
-    if temp_args.dx_info:
-        logger.setup_silent_logger()
-        import json
-
-        from tc2_launcher.hardware import get_dx_info
-
-        is_supported, gpu_info, error_msg = get_dx_info()
-        print(
-            json.dumps(
-                {
-                    "is_supported": is_supported,
-                    "gpu_info": gpu_info,
-                    "error_msg": error_msg,
-                }
-            )
-        )
-        return
-
     parser.add_argument(
         "--dest",
         default=None,

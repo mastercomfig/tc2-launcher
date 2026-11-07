@@ -199,12 +199,30 @@ def is_steam_running():
         return steam_proc.name() == "steam"
 
 
+_ssl_context: ssl.SSLContext | None = None
+
+
 def get_ssl_context() -> ssl.SSLContext:
-    context = ssl.create_default_context()
+    global _ssl_context
+    if _ssl_context is not None:
+        return _ssl_context
 
-    if not context.get_ca_certs():
-        context.load_verify_locations(cafile=certifi.where())
+    cafile = certifi.where()
+    try:
+        context = ssl.create_default_context()
+    except ssl.SSLError as e:
+        logger.warning(
+            f"Failed to load system SSL certificates, falling back to certifi: {e}"
+        )
+        _ssl_context = ssl.create_default_context(cafile=cafile)
+        return _ssl_context
 
+    try:
+        context.load_verify_locations(cafile=cafile)
+    except Exception as e:
+        logger.error(f"Failed to load certifi CA bundle: {e}")
+
+    _ssl_context = context
     return context
 
 

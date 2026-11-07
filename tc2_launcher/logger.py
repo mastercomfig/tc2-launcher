@@ -29,7 +29,10 @@ class UserDataScrubberFormatter(logging.Formatter):
 
 def setup_logger(log_folder: Path):
     global root_log
+    if root_log is not None:
+        return
 
+    log_folder.mkdir(parents=True, exist_ok=True)
     log_file_path = log_folder / "tc2_launcher_log.txt"
 
     format_string = "%(asctime)s [%(levelname)-5.5s]  %(message)s"
@@ -39,7 +42,7 @@ def setup_logger(log_folder: Path):
     root_log = logging.getLogger("tc2_launcher")
 
     # File handler
-    file_handler = logging.FileHandler(log_file_path)
+    file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
     file_handler.setFormatter(log_formatter)
     root_log.addHandler(file_handler)
 
