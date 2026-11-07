@@ -9,7 +9,7 @@ license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "setuptools (>=80.9.0,<81.0.0)",
+    "setuptools (>=80.9.0,<85.0.0)",
     "wheel (>=0.45.1,<0.46.0)",
     "pythonnet (>=3.0.5,<4.0.0)",
     "pyinstaller (>=6.17.0,<7.0.0)",
