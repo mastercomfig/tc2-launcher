@@ -181,9 +181,75 @@ def run_async_thread(task: Coroutine[Any, Any, Any]):
     threading.Thread(target=run_task, daemon=True).start()
 
 
+def _find_asset(release: dict, asset_filter: str) -> tuple[str, str, str | None] | None:
+    assets = release.get("assets") or []
+    for a in assets:
+        if a.get("state", "uploaded") != "uploaded":
+            continue
+        name = a.get("name", "")
+        download_url = a.get("browser_download_url")
+        if download_url and asset_filter.lower() in name.lower():
+            return name, download_url, a.get("digest")
+    return None
+
+
+async def _search_releases_for_latest(
+    url: str,
+    prerelease: bool,
+    asset_filter: str,
+    session: aiohttp.ClientSession,
+    max_pages: int = 3,
+) -> dict | None:
+    next_url: str | None = url
+    saw_stable = False
+    try:
+        for _ in range(max_pages):
+            if not next_url:
+                break
+            async with session.get(
+                next_url, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                resp.raise_for_status()
+                releases = await resp.json()
+                for release in releases:
+                    if release.get("draft", False):
+                        continue
+                    is_prerelease = release.get("prerelease", False)
+                    if not is_prerelease:
+                        saw_stable = True
+                    if not prerelease and is_prerelease:
+                        continue
+                    if not _find_asset(release, asset_filter):
+                        continue
+                    return release
+                next_link = resp.links.get("next")
+                next_url = str(next_link["url"]) if next_link else None
+
+        if not prerelease and not saw_stable and next_url:
+            async with session.get(
+                f"{url}/latest", timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                resp.raise_for_status()
+                release = await resp.json()
+                if (
+                    not release.get("draft", False)
+                    and not release.get("prerelease", False)
+                    and _find_asset(release, asset_filter)
+                ):
+                    return release
+    except Exception as e:
+        logger.error(f"Failed to get release searching {url}: {e}")
+    return None
+
+
 async def _get_latest_release(
-    dest: Path | None, repo: str, session: aiohttp.ClientSession
+    dest: Path | None,
+    repo: str,
+    asset_filter: str,
+    session: aiohttp.ClientSession,
 ) -> dict:
+    url = f"https://api.github.com/repos/{repo}/releases"
+    prerelease = False
     if repo == TC2_REPO:
         if not dest:
             dest = default_dest_dir()
@@ -191,45 +257,35 @@ async def _get_latest_release(
         settings = read_settings(dest)
         branch = settings.get("branch")
         if branch == "prerelease":
-            async with session.get(
-                f"https://api.github.com/repos/{repo}/releases",
-                timeout=aiohttp.ClientTimeout(total=30),
-                params={"per_page": 1},
-            ) as resp:
-                resp.raise_for_status()
-                releases = await resp.json()
-                return releases[0] if releases else {}
+            prerelease = True
         elif branch and branch[0].isdigit():
             try:
                 async with session.get(
-                    f"https://api.github.com/repos/{repo}/releases/tags/{branch}",
+                    f"{url}/tags/{branch}",
                     timeout=aiohttp.ClientTimeout(total=30),
                 ) as resp:
                     resp.raise_for_status()
-                    return await resp.json()
+                    release = await resp.json()
+                    if _find_asset(release, asset_filter):
+                        return release
+                    logger.error(
+                        f"No asset matching '{asset_filter}' found in release for branch {branch}, falling back to latest."
+                    )
             except Exception as e:
                 logger.error(
                     f"Failed to get release for branch {branch}, falling back to latest: {e}"
                 )
 
-    async with session.get(
-        f"https://api.github.com/repos/{repo}/releases/latest",
-        timeout=aiohttp.ClientTimeout(total=30),
-    ) as resp:
-        resp.raise_for_status()
-        return await resp.json()
-
-
-def _find_asset(release: dict, asset_filter: str) -> tuple[str, str, str] | None:
-    assets = release.get("assets", [])
-    for a in assets:
-        name = a.get("name", "")
-        if asset_filter.lower() in name.lower():
-            return name, a.get("browser_download_url"), a.get("digest")
-    return None
+    release = await _search_releases_for_latest(url, prerelease, asset_filter, session)
+    return release or {}
 
 
 async def update_self() -> bool:
+    if os.name == "nt":
+        asset_filter = ".exe"
+    else:
+        asset_filter = "-linux"
+
     try:
         ssl = get_ssl_context()
         if ssl:
@@ -242,21 +298,24 @@ async def update_self() -> bool:
             max_line_size=65536,
             max_field_size=65536,
         ) as session:
-            release = await _get_latest_release(None, LAUNCHER_REPO, session)
+            release = await _get_latest_release(
+                None, LAUNCHER_REPO, asset_filter, session
+            )
             tag = release.get("tag_name", "").lstrip("v")
     except Exception as e:
         logger.error(f"Failed to get self-update info: {e}")
         return False
 
+    if not tag:
+        logger.error("Could not determine self-update release tag.")
+        return False
+
     if tag == VERSION_STR:
+        logger.info(f"On latest version: {VERSION_STR}")
         return False
 
     logger.info(f"Self-update available: {VERSION_STR} -> {tag}")
 
-    if os.name == "nt":
-        asset_filter = ".exe"
-    else:
-        asset_filter = "-linux"
     asset = _find_asset(release, asset_filter)
     if not asset:
         logger.error(
@@ -516,6 +575,11 @@ async def update_archive(
     else:
         fail_code = 2
 
+    if os.name == "nt":
+        asset_filter = "game-win.zip"
+    else:
+        asset_filter = "game-linux.zip"
+
     try:
         ssl = get_ssl_context()
         if ssl:
@@ -528,7 +592,7 @@ async def update_archive(
             max_line_size=65536,
             max_field_size=65536,
         ) as session:
-            release = await _get_latest_release(dest, TC2_REPO, session)
+            release = await _get_latest_release(dest, TC2_REPO, asset_filter, session)
             tag = release.get("tag_name")
             if not tag:
                 logger.error("Could not determine release tag.")
@@ -542,11 +606,6 @@ async def update_archive(
     current_digest = state.get("digest")
 
     _set_game_version(current_tag, current_digest)
-
-    if os.name == "nt":
-        asset_filter = "game-win.zip"
-    else:
-        asset_filter = "game-linux.zip"
 
     if tag:
         asset = _find_asset(release, asset_filter)
@@ -729,6 +788,71 @@ def run_non_blocking(
 
 
 _has_randomized_this_session = False
+MIN_INSTALL_PATH_LENGTH = 24
+
+
+def get_path_length(path: Path) -> int:
+    return len(path.as_posix().rstrip("/"))
+
+
+def is_path_too_short(path: Path) -> bool:
+    return get_path_length(path) < MIN_INSTALL_PATH_LENGTH
+
+
+def _is_legacy_tc2_dir_name(path: Path) -> bool:
+    folder_name = path.name.lower()
+    return folder_name == "tc2" or folder_name.startswith("tc2_")
+
+
+def _get_padded_game_dir(path: Path) -> Path:
+    if path.name.lower() == "games":
+        games_dir = path / "Team Comtress 2"
+        if not is_path_too_short(games_dir) and not games_dir.exists():
+            return games_dir
+
+    base_dir = path.with_name("Team Comtress 2")
+    if not is_path_too_short(base_dir) and not base_dir.exists():
+        return base_dir
+
+    import uuid
+
+    base_len = get_path_length(base_dir)
+    suffix_len = max(4, MIN_INSTALL_PATH_LENGTH - base_len)
+    while True:
+        random_suffix = uuid.uuid4().hex[:suffix_len]
+        candidate = path.with_name(f"Team Comtress 2 {random_suffix}")
+        if not candidate.exists():
+            return candidate
+        suffix_len = min(32, suffix_len + 1)
+
+
+def _rename_game_dir(old_path: Path, new_path: Path) -> None:
+    old_path = old_path.resolve()
+    new_path = new_path.resolve()
+    if old_path == new_path:
+        return
+
+    if new_path.is_relative_to(old_path):
+        import uuid
+
+        temp_path = old_path.parent / f"tc2_migrate_{uuid.uuid4().hex[:8]}"
+        while temp_path.exists():
+            temp_path = old_path.parent / f"tc2_migrate_{uuid.uuid4().hex[:8]}"
+        old_path.rename(temp_path)
+        try:
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path.rename(new_path)
+        except Exception:
+            try:
+                temp_path.rename(old_path)
+            except Exception:
+                pass
+            raise
+    else:
+        if new_path.exists() and new_path.is_dir() and not any(new_path.iterdir()):
+            new_path.rmdir()
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        old_path.rename(new_path)
 
 
 def get_game_dir(dest: Path | None = None) -> Path:
@@ -740,32 +864,39 @@ def get_game_dir(dest: Path | None = None) -> Path:
     if os.name == "nt" and not _has_randomized_this_session:
         is_unset = not user_game_dir
         is_default_tc2 = False
+        is_too_short = False
         if user_game_dir:
             try:
                 resolved_user_dir = Path(user_game_dir).resolve()
-                folder_name = resolved_user_dir.name.lower()
-                if folder_name == "tc2" or folder_name.startswith("tc2_"):
+                if _is_legacy_tc2_dir_name(resolved_user_dir):
                     is_default_tc2 = True
+                elif is_path_too_short(resolved_user_dir):
+                    is_too_short = True
             except Exception:
                 pass
 
-        if is_unset or is_default_tc2:
-            import uuid
-
-            random_suffix = uuid.uuid4().hex[:8]
+        if is_unset or is_default_tc2 or is_too_short:
             drive = Path.home().drive
 
             if is_unset:
                 old_path = Path(f"{drive}\\") / "tc2"
-                new_path = Path(f"{drive}\\") / f"tc2_{random_suffix}"
+                new_path = Path(f"{drive}\\") / "Games" / "Team Comtress 2"
             else:
                 old_path = Path(user_game_dir).resolve()
-                new_path = old_path.parent / f"tc2_{random_suffix}"
+                new_path = old_path.parent / "Team Comtress 2"
+                if is_path_too_short(new_path):
+                    new_path = old_path.parent / "Games" / "Team Comtress 2"
 
             rename_succeeded = False
-            if old_path.exists() and old_path.is_dir():
+            if old_path.exists() and old_path.is_dir() and not old_path.is_mount():
+                if (
+                    new_path.exists()
+                    and not new_path.is_relative_to(old_path)
+                    and (not new_path.is_dir() or any(new_path.iterdir()))
+                ):
+                    new_path = _get_padded_game_dir(new_path)
                 try:
-                    old_path.rename(new_path)
+                    _rename_game_dir(old_path, new_path)
                     logger.info(
                         f"Renamed default game directory from {old_path} to {new_path}"
                     )
@@ -807,7 +938,7 @@ def get_game_dir(dest: Path | None = None) -> Path:
     if not dest or dest == default_dest:
         if os.name == "nt" and not default_game_dest.exists():
             drive = Path.home().drive
-            dest = Path(f"{drive}\\") / "tc2"
+            dest = Path(f"{drive}\\") / "Games" / "Team Comtress 2"
             return dest
         else:
             return default_game_dest
@@ -1164,36 +1295,76 @@ def change_install_folder(new_game_dir: Path, dest: Path | None = None):
         )
         return
 
+    selected_dir = new_game_dir
+    selected_was_empty = False
+    was_empty_or_missing = True
+    did_randomize = False
+
     try:
+        exe_name = "tc2_win64.exe" if os.name == "nt" else "tc2_linux64"
+
         # Check if the directory already contains the game executable
         is_game_dir = False
-        if os.name == "nt":
-            if (new_game_dir / "tc2_win64.exe").exists():
-                is_game_dir = True
-        else:
-            if (new_game_dir / "tc2_linux64").exists():
-                is_game_dir = True
+        if not new_game_dir.is_mount() and (new_game_dir / exe_name).exists():
+            is_game_dir = True
+        elif (
+            new_game_dir.exists()
+            and new_game_dir.is_dir()
+            and not new_game_dir.is_mount()
+            and not any(new_game_dir.iterdir())
+        ):
+            selected_was_empty = True
+
+        source_game_dir = new_game_dir
 
         # if the directory is a mount point or not empty (and not already a game dir), create a subdirectory
-        if new_game_dir.is_mount() or (any(new_game_dir.iterdir()) and not is_game_dir):
-            new_game_dir = new_game_dir / "tc2"
+        if new_game_dir.is_mount() or (
+            new_game_dir.exists() and any(new_game_dir.iterdir()) and not is_game_dir
+        ):
+            new_game_dir = new_game_dir / "Team Comtress 2"
+            if os.name == "nt" and is_path_too_short(new_game_dir):
+                new_game_dir = new_game_dir.parent / "Games" / "Team Comtress 2"
+                did_randomize = True
+            if (new_game_dir / exe_name).exists():
+                is_game_dir = True
+                source_game_dir = new_game_dir
 
-        if os.name == "nt" and not is_game_dir:
-            folder_name = new_game_dir.name.lower()
-            if folder_name == "tc2":
-                import uuid
-
-                random_suffix = uuid.uuid4().hex[:8]
-                new_game_dir = new_game_dir.with_name(f"tc2_{random_suffix}")
-                _has_randomized_this_session = True
+        if os.name == "nt":
+            if is_path_too_short(new_game_dir) or _is_legacy_tc2_dir_name(new_game_dir):
+                new_game_dir = _get_padded_game_dir(new_game_dir)
+                did_randomize = True
 
         new_game_dir = new_game_dir.resolve()
-        new_game_dir.mkdir(parents=True, exist_ok=True)
-        if not new_game_dir.exists() or not new_game_dir.is_dir():
-            raise Exception("Failed to create directory")
-        test_path = new_game_dir / "test.txt"
-        test_path.touch()
-        test_path.unlink()
+        if new_game_dir == old_game_dir:
+            logger.error(f"Cannot move game directory to itself: {new_game_dir}")
+            return
+
+        if new_game_dir.is_relative_to(old_game_dir):
+            logger.error(
+                f"Cannot move game directory to a subdirectory of itself: {new_game_dir}"
+            )
+            return
+
+        if is_game_dir and new_game_dir != source_game_dir:
+            test_path = source_game_dir / "test.txt"
+            test_path.touch()
+            test_path.unlink()
+            _rename_game_dir(source_game_dir, new_game_dir)
+            logger.info(
+                f"Renamed game directory from {source_game_dir} to {new_game_dir}"
+            )
+            if not new_game_dir.exists() or not new_game_dir.is_dir():
+                raise Exception("Failed to rename directory")
+        else:
+            was_empty_or_missing = not new_game_dir.exists() or not any(
+                new_game_dir.iterdir()
+            )
+            new_game_dir.mkdir(parents=True, exist_ok=True)
+            if not new_game_dir.exists() or not new_game_dir.is_dir():
+                raise Exception("Failed to create directory")
+            test_path = new_game_dir / "test.txt"
+            test_path.touch()
+            test_path.unlink()
     except Exception as e:
         logger.error(f"Invalid path '{new_game_dir}': {e}")
         return
@@ -1203,21 +1374,36 @@ def change_install_folder(new_game_dir: Path, dest: Path | None = None):
             copytree(old_game_dir, new_game_dir, dirs_exist_ok=True)
         except Exception as e:
             logger.error(f"Failed to copy game directory: {e}")
-            try:
-                rmtree(new_game_dir)
-            except Exception:
-                pass
+            if was_empty_or_missing:
+                try:
+                    rmtree(new_game_dir)
+                except Exception:
+                    pass
             return
 
         try:
             rmtree(old_game_dir)
         except Exception as e:
             logger.error(f"Failed to remove old game directory: {e}")
-            try:
-                rmtree(new_game_dir)
-            except Exception as undo_e:
-                logger.error(f"Failed to undo copy: {undo_e}")
+            if was_empty_or_missing:
+                try:
+                    rmtree(new_game_dir)
+                except Exception as undo_e:
+                    logger.error(f"Failed to undo copy: {undo_e}")
             return
+
+    if (
+        selected_was_empty
+        and selected_dir != new_game_dir
+        and not new_game_dir.is_relative_to(selected_dir)
+    ):
+        try:
+            selected_dir.rmdir()
+        except Exception:
+            pass
+
+    if did_randomize:
+        _has_randomized_this_session = True
 
     settings = read_settings(dest)
     settings["game_dir"] = str(new_game_dir)
