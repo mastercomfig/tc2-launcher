@@ -48,68 +48,520 @@ TC2_REPO = "mastercomfig/tc2"
 LAUNCHER_REPO = "mastercomfig/tc2-launcher"
 
 
-def get_native_resolution() -> tuple[int, int] | tuple[None, None]:
-    if os.name == "nt":
-        import ctypes
+def _is_exe_dpi_aware_windows(exe_path: Path | None) -> bool:
+    sdl_dpi = os.getenv("SDL_WINDOWS_DPI_AWARENESS", "").strip().lower()
+    if sdl_dpi in {"system", "permonitor", "permonitorv2"}:
+        return True
 
-        try:
-            return (
-                ctypes.windll.user32.GetSystemMetrics(0),
-                ctypes.windll.user32.GetSystemMetrics(1),
-            )
-        except Exception:
-            return None, None
+    layer_tokens: list[str] = []
+    if exe_path and winreg:
+        exe_str = str(exe_path)
+        layers_subkey = (
+            r"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"
+        )
+        for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                with winreg.OpenKey(root, layers_subkey) as key:
+                    val, _ = winreg.QueryValueEx(key, exe_str)
+                    if isinstance(val, str):
+                        layer_tokens.extend(val.upper().split())
+                        break
+            except OSError:
+                continue
+
+    env_layer = os.getenv("__COMPAT_LAYER", "")
+    if env_layer:
+        layer_tokens.extend(env_layer.upper().split())
+
+    if "DPIUNAWARE" in layer_tokens:
+        return False
+    if "HIGHDPIAWARE" in layer_tokens:
+        return True
+    return False
+
+
+def _get_windows_resolution(
+    exe_path: Path | None = None,
+) -> tuple[int, int] | tuple[None, None]:
+    import ctypes
+    from ctypes import wintypes
+
+    dpi_aware = _is_exe_dpi_aware_windows(exe_path)
+
+    try:
+        user32 = ctypes.WinDLL("user32")
+    except Exception:
+        return None, None
+
+    class DEVMODEW(ctypes.Structure):
+        _fields_ = [
+            ("dmDeviceName", wintypes.WCHAR * 32),
+            ("dmSpecVersion", wintypes.WORD),
+            ("dmDriverVersion", wintypes.WORD),
+            ("dmSize", wintypes.WORD),
+            ("dmDriverExtra", wintypes.WORD),
+            ("dmFields", wintypes.DWORD),
+            ("dmPositionX", wintypes.LONG),
+            ("dmPositionY", wintypes.LONG),
+            ("dmDisplayOrientation", wintypes.DWORD),
+            ("dmDisplayFixedOutput", wintypes.DWORD),
+            ("dmColor", ctypes.c_short),
+            ("dmDuplex", ctypes.c_short),
+            ("dmYResolution", ctypes.c_short),
+            ("dmTTOption", ctypes.c_short),
+            ("dmCollate", ctypes.c_short),
+            ("dmFormName", wintypes.WCHAR * 32),
+            ("dmLogPixels", wintypes.WORD),
+            ("dmBitsPerPel", wintypes.DWORD),
+            ("dmPelsWidth", wintypes.DWORD),
+            ("dmPelsHeight", wintypes.DWORD),
+            ("dmDisplayFlags", wintypes.DWORD),
+            ("dmDisplayFrequency", wintypes.DWORD),
+            ("dmICMMethod", wintypes.DWORD),
+            ("dmICMIntent", wintypes.DWORD),
+            ("dmMediaType", wintypes.DWORD),
+            ("dmDitherType", wintypes.DWORD),
+            ("dmReserved1", wintypes.DWORD),
+            ("dmReserved2", wintypes.DWORD),
+            ("dmPanningWidth", wintypes.DWORD),
+            ("dmPanningHeight", wintypes.DWORD),
+        ]
+
+    phys_w: int | None = None
+    phys_h: int | None = None
+    try:
+        EnumDisplaySettingsW = user32.EnumDisplaySettingsW
+        EnumDisplaySettingsW.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            ctypes.POINTER(DEVMODEW),
+        ]
+        EnumDisplaySettingsW.restype = wintypes.BOOL
+        dm = DEVMODEW()
+        dm.dmSize = ctypes.sizeof(DEVMODEW)
+        if EnumDisplaySettingsW(None, 0xFFFFFFFF, ctypes.byref(dm)):
+            if dm.dmPelsWidth > 0 and dm.dmPelsHeight > 0:
+                phys_w = int(dm.dmPelsWidth)
+                phys_h = int(dm.dmPelsHeight)
+    except Exception:
+        pass
+
+    set_ctx = None
+    if hasattr(user32, "SetThreadDpiAwarenessContext"):
+        set_ctx = user32.SetThreadDpiAwarenessContext
+        set_ctx.argtypes = [ctypes.c_void_p]
+        set_ctx.restype = ctypes.c_void_p
+
+    GetSystemMetrics = user32.GetSystemMetrics
+    GetSystemMetrics.argtypes = [ctypes.c_int]
+    GetSystemMetrics.restype = ctypes.c_int
+
+    if dpi_aware:
+        if phys_w and phys_h:
+            return phys_w, phys_h
+        if set_ctx is not None:
+            prev_ctx = set_ctx(ctypes.c_void_p(-4)) or set_ctx(ctypes.c_void_p(-2))
+            if prev_ctx:
+                try:
+                    w = GetSystemMetrics(0)
+                    h = GetSystemMetrics(1)
+                    if w > 0 and h > 0:
+                        return w, h
+                finally:
+                    set_ctx(ctypes.c_void_p(prev_ctx))
     else:
-        # Try xrandr
-        try:
-            output = subprocess.check_output(
-                ["xrandr", "--current"], stderr=subprocess.DEVNULL
-            ).decode()
-            for line in output.splitlines():
-                if "current" in line and "connected" not in line:
-                    parts = line.split("current")
-                    if len(parts) > 1:
-                        res = parts[1].split(",")[0].strip()
-                        w, h = map(int, res.split("x"))
-                        return w, h
-        except Exception:
-            pass
+        if phys_w and phys_h and set_ctx is not None:
+            try:
+                shcore = ctypes.WinDLL("shcore")
+                MonitorFromWindow = user32.MonitorFromWindow
+                MonitorFromWindow.argtypes = [ctypes.c_void_p, wintypes.DWORD]
+                MonitorFromWindow.restype = ctypes.c_void_p
+                GetDpiForMonitor = shcore.GetDpiForMonitor
+                GetDpiForMonitor.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_int,
+                    ctypes.POINTER(ctypes.c_uint),
+                    ctypes.POINTER(ctypes.c_uint),
+                ]
+                GetDpiForMonitor.restype = ctypes.c_long
 
-        # Try wayland-info
-        try:
-            import re
+                prev_ctx = set_ctx(ctypes.c_void_p(-4)) or set_ctx(ctypes.c_void_p(-3))
+                if prev_ctx:
+                    try:
+                        # MONITOR_DEFAULTTOPRIMARY = 1, MDT_EFFECTIVE_DPI = 0
+                        hmon = MonitorFromWindow(None, 1)
+                        if hmon:
+                            dpi_x = ctypes.c_uint(0)
+                            dpi_y = ctypes.c_uint(0)
+                            hr = GetDpiForMonitor(
+                                hmon, 0, ctypes.byref(dpi_x), ctypes.byref(dpi_y)
+                            )
+                            if hr == 0 and dpi_x.value > 0 and dpi_y.value > 0:
+                                w = (phys_w * 96 + dpi_x.value // 2) // dpi_x.value
+                                h = (phys_h * 96 + dpi_y.value // 2) // dpi_y.value
+                                if w > 0 and h > 0:
+                                    return w, h
+                    finally:
+                        set_ctx(ctypes.c_void_p(prev_ctx))
+            except Exception:
+                pass
 
-            output = subprocess.check_output(
-                ["wayland-info"], stderr=subprocess.DEVNULL
-            ).decode()
-            sections = output.split("interface: 'wl_output'")
-            for section in sections[1:]:
-                modes = section.split("mode:")
-                for mode in modes[1:]:
-                    if "flags: current" in mode:
-                        w_match = re.search(r"width:\s*(\d+)", mode)
-                        h_match = re.search(r"height:\s*(\d+)", mode)
-                        if w_match and h_match:
-                            return int(w_match.group(1)), int(h_match.group(1))
-        except Exception:
-            pass
+        if set_ctx is not None:
+            try:
+                # DPI_AWARENESS_CONTEXT_UNAWARE = -1
+                prev_ctx = set_ctx(ctypes.c_void_p(-1))
+                if prev_ctx:
+                    try:
+                        w = GetSystemMetrics(0)
+                        h = GetSystemMetrics(1)
+                        if w > 0 and h > 0:
+                            return w, h
+                    finally:
+                        set_ctx(ctypes.c_void_p(prev_ctx))
+            except Exception:
+                pass
 
-        # Fallback to /sys/class/drm
+    try:
+        w = GetSystemMetrics(0)
+        h = GetSystemMetrics(1)
+        if w > 0 and h > 0:
+            return w, h
+    except Exception:
+        pass
+    return None, None
+
+
+def _parse_xrandr_output(output: str) -> tuple[int, int] | tuple[None, None]:
+    import re
+
+    pattern = re.compile(
+        r"^\S+\s+connected\s+(primary\s+)?(\d+)x(\d+)([+-]\d+)([+-]\d+)\b"
+    )
+    origin_res: tuple[int, int] | None = None
+    first_res: tuple[int, int] | None = None
+
+    for line in output.splitlines():
+        match = pattern.match(line)
+        if not match:
+            continue
+        is_primary = bool(match.group(1))
+        w, h = int(match.group(2)), int(match.group(3))
+        if w <= 0 or h <= 0:
+            continue
+        if is_primary:
+            return w, h
+        x, y = int(match.group(4)), int(match.group(5))
+        if x == 0 and y == 0 and origin_res is None:
+            origin_res = (w, h)
+        if first_res is None:
+            first_res = (w, h)
+
+    if origin_res is not None:
+        return origin_res
+    if first_res is not None:
+        return first_res
+    return None, None
+
+
+def _get_xrandr_ctypes_resolution() -> tuple[int, int] | tuple[None, None]:
+    if not os.getenv("DISPLAY"):
+        return None, None
+
+    import ctypes
+
+    class XRRScreenResources(ctypes.Structure):
+        _fields_ = [
+            ("timestamp", ctypes.c_ulong),
+            ("configTimestamp", ctypes.c_ulong),
+            ("ncrtc", ctypes.c_int),
+            ("crtcs", ctypes.POINTER(ctypes.c_ulong)),
+            ("noutput", ctypes.c_int),
+            ("outputs", ctypes.POINTER(ctypes.c_ulong)),
+            ("nmode", ctypes.c_int),
+            ("modes", ctypes.c_void_p),
+        ]
+
+    class XRROutputInfo(ctypes.Structure):
+        _fields_ = [
+            ("timestamp", ctypes.c_ulong),
+            ("crtc", ctypes.c_ulong),
+            ("name", ctypes.c_char_p),
+            ("nameLen", ctypes.c_int),
+            ("mm_width", ctypes.c_ulong),
+            ("mm_height", ctypes.c_ulong),
+            ("connection", ctypes.c_ushort),
+            ("subpixel_order", ctypes.c_ushort),
+            ("ncrtc", ctypes.c_int),
+            ("crtcs", ctypes.POINTER(ctypes.c_ulong)),
+            ("nclone", ctypes.c_int),
+            ("clones", ctypes.POINTER(ctypes.c_ulong)),
+            ("nmode", ctypes.c_int),
+            ("npreferred", ctypes.c_int),
+            ("modes", ctypes.POINTER(ctypes.c_ulong)),
+        ]
+
+    class XRRCrtcInfo(ctypes.Structure):
+        _fields_ = [
+            ("timestamp", ctypes.c_ulong),
+            ("x", ctypes.c_int),
+            ("y", ctypes.c_int),
+            ("width", ctypes.c_uint),
+            ("height", ctypes.c_uint),
+            ("mode", ctypes.c_ulong),
+            ("rotation", ctypes.c_ushort),
+            ("noutput", ctypes.c_int),
+            ("outputs", ctypes.POINTER(ctypes.c_ulong)),
+            ("rotations", ctypes.c_ushort),
+            ("npossible", ctypes.c_int),
+            ("possible", ctypes.POINTER(ctypes.c_ulong)),
+        ]
+
+    with restore_system_env():
         try:
-            for modes_file in Path("/sys/class/drm").glob("card*-*/modes"):
-                enabled_file = modes_file.parent / "enabled"
-                if (
-                    enabled_file.exists()
-                    and enabled_file.read_text().strip() == "enabled"
-                ):
-                    modes = modes_file.read_text().splitlines()
-                    if modes:
-                        w, h = map(int, modes[0].split("x"))
-                        return w, h
+            x11 = ctypes.CDLL("libX11.so.6")
+            xrandr = ctypes.CDLL("libXrandr.so.2")
+
+            x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+            x11.XOpenDisplay.restype = ctypes.c_void_p
+            x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+            x11.XDefaultRootWindow.restype = ctypes.c_ulong
+            x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+            x11.XCloseDisplay.restype = ctypes.c_int
+
+            xrandr.XRRGetScreenResourcesCurrent.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+            ]
+            xrandr.XRRGetScreenResourcesCurrent.restype = ctypes.POINTER(
+                XRRScreenResources
+            )
+            xrandr.XRRFreeScreenResources.argtypes = [
+                ctypes.POINTER(XRRScreenResources)
+            ]
+            xrandr.XRRFreeScreenResources.restype = None
+            xrandr.XRRGetOutputPrimary.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+            xrandr.XRRGetOutputPrimary.restype = ctypes.c_ulong
+            xrandr.XRRGetOutputInfo.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(XRRScreenResources),
+                ctypes.c_ulong,
+            ]
+            xrandr.XRRGetOutputInfo.restype = ctypes.POINTER(XRROutputInfo)
+            xrandr.XRRFreeOutputInfo.argtypes = [ctypes.POINTER(XRROutputInfo)]
+            xrandr.XRRFreeOutputInfo.restype = None
+            xrandr.XRRGetCrtcInfo.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(XRRScreenResources),
+                ctypes.c_ulong,
+            ]
+            xrandr.XRRGetCrtcInfo.restype = ctypes.POINTER(XRRCrtcInfo)
+            xrandr.XRRFreeCrtcInfo.argtypes = [ctypes.POINTER(XRRCrtcInfo)]
+            xrandr.XRRFreeCrtcInfo.restype = None
+
+            dpy = x11.XOpenDisplay(None)
+            if not dpy:
+                return None, None
+            try:
+                root = x11.XDefaultRootWindow(dpy)
+                res = xrandr.XRRGetScreenResourcesCurrent(dpy, root)
+                if not res:
+                    return None, None
+                try:
+                    primary_out = xrandr.XRRGetOutputPrimary(dpy, root)
+                    if primary_out:
+                        out_info = xrandr.XRRGetOutputInfo(dpy, res, primary_out)
+                        if out_info:
+                            try:
+                                # RR_Connected == 0
+                                if (
+                                    out_info.contents.connection == 0
+                                    and out_info.contents.crtc
+                                ):
+                                    crtc_info = xrandr.XRRGetCrtcInfo(
+                                        dpy, res, out_info.contents.crtc
+                                    )
+                                    if crtc_info:
+                                        try:
+                                            w = int(crtc_info.contents.width)
+                                            h = int(crtc_info.contents.height)
+                                            if w > 0 and h > 0:
+                                                return w, h
+                                        finally:
+                                            xrandr.XRRFreeCrtcInfo(crtc_info)
+                            finally:
+                                xrandr.XRRFreeOutputInfo(out_info)
+
+                    origin_res: tuple[int, int] | None = None
+                    first_res: tuple[int, int] | None = None
+                    for i in range(res.contents.ncrtc):
+                        crtc_id = res.contents.crtcs[i]
+                        if not crtc_id:
+                            continue
+                        crtc_info = xrandr.XRRGetCrtcInfo(dpy, res, crtc_id)
+                        if not crtc_info:
+                            continue
+                        try:
+                            w = int(crtc_info.contents.width)
+                            h = int(crtc_info.contents.height)
+                            if crtc_info.contents.noutput > 0 and w > 0 and h > 0:
+                                if (
+                                    crtc_info.contents.x == 0
+                                    and crtc_info.contents.y == 0
+                                    and origin_res is None
+                                ):
+                                    origin_res = (w, h)
+                                if first_res is None:
+                                    first_res = (w, h)
+                        finally:
+                            xrandr.XRRFreeCrtcInfo(crtc_info)
+
+                    if origin_res is not None:
+                        return origin_res
+                    if first_res is not None:
+                        return first_res
+                finally:
+                    xrandr.XRRFreeScreenResources(res)
+            finally:
+                x11.XCloseDisplay(dpy)
         except Exception:
             pass
 
     return None, None
+
+
+def _get_x11_resolution() -> tuple[int, int] | tuple[None, None]:
+    if not os.getenv("DISPLAY"):
+        return None, None
+
+    try:
+        output = subprocess.check_output(
+            ["xrandr", "--current"],
+            stderr=subprocess.DEVNULL,
+            env=get_safe_env(),
+            timeout=5,
+        ).decode(errors="ignore")
+        w, h = _parse_xrandr_output(output)
+        if w and h:
+            return w, h
+    except Exception:
+        pass
+
+    return _get_xrandr_ctypes_resolution()
+
+
+def _parse_wayland_info_output(output: str) -> tuple[int, int] | tuple[None, None]:
+    import re
+
+    globals_blocks = output.split("interface: '")
+
+    # Prefer zxdg_output_manager_v1 logical dimensions (accounts for fractional/HiDPI scaling & rotation)
+    for block in globals_blocks[1:]:
+        if not block.startswith("zxdg_output_manager_v1'"):
+            continue
+        origin_res: tuple[int, int] | None = None
+        first_res: tuple[int, int] | None = None
+        for xdg_out in block.split("xdg_output_v1")[1:]:
+            lw_match = re.search(r"logical_width:\s*(\d+)", xdg_out)
+            lh_match = re.search(r"logical_height:\s*(\d+)", xdg_out)
+            if not lw_match or not lh_match:
+                continue
+            w, h = int(lw_match.group(1)), int(lh_match.group(1))
+            if w <= 0 or h <= 0:
+                continue
+            lx_match = re.search(r"logical_x:\s*(-?\d+)", xdg_out)
+            ly_match = re.search(r"logical_y:\s*(-?\d+)", xdg_out)
+            if (
+                lx_match
+                and ly_match
+                and int(lx_match.group(1)) == 0
+                and int(ly_match.group(1)) == 0
+                and origin_res is None
+            ):
+                origin_res = (w, h)
+            if first_res is None:
+                first_res = (w, h)
+        if origin_res is not None:
+            return origin_res
+        if first_res is not None:
+            return first_res
+
+    # Fallback to wl_output current mode divided by scale
+    origin_wl: tuple[int, int] | None = None
+    first_wl: tuple[int, int] | None = None
+    for block in globals_blocks[1:]:
+        if not block.startswith("wl_output'"):
+            continue
+        parts = block.split("mode:")
+        header = parts[0]
+        scale_match = re.search(r"scale:\s*(\d+)", header)
+        scale = max(1, int(scale_match.group(1))) if scale_match else 1
+        transform_match = re.search(r"output_transform:\s*([\w-]+)", header)
+        transform = transform_match.group(1) if transform_match else "normal"
+        pos_match = re.search(r"\bx:\s*(-?\d+),\s*y:\s*(-?\d+)", header)
+        is_origin = (
+            bool(pos_match)
+            and int(pos_match.group(1)) == 0
+            and int(pos_match.group(2)) == 0
+        )
+
+        for mode in parts[1:]:
+            if re.search(r"flags:.*\bcurrent\b", mode):
+                w_match = re.search(r"width:\s*(\d+)", mode)
+                h_match = re.search(r"height:\s*(\d+)", mode)
+                if w_match and h_match:
+                    w = int(w_match.group(1))
+                    h = int(h_match.group(1))
+                    if "90" in transform or "270" in transform:
+                        w, h = h, w
+                    w = w // scale
+                    h = h // scale
+                    if w > 0 and h > 0:
+                        if is_origin and origin_wl is None:
+                            origin_wl = (w, h)
+                        if first_wl is None:
+                            first_wl = (w, h)
+                        break
+
+    if origin_wl is not None:
+        return origin_wl
+    if first_wl is not None:
+        return first_wl
+    return None, None
+
+
+def _get_wayland_resolution() -> tuple[int, int] | tuple[None, None]:
+    if not (os.getenv("WAYLAND_DISPLAY") or os.getenv("XDG_SESSION_TYPE") == "wayland"):
+        return None, None
+
+    try:
+        output = subprocess.check_output(
+            ["wayland-info"],
+            stderr=subprocess.DEVNULL,
+            env=get_safe_env(),
+            timeout=5,
+        ).decode(errors="ignore")
+        return _parse_wayland_info_output(output)
+    except Exception:
+        return None, None
+
+
+def get_native_resolution(
+    exe_path: Path | None = None,
+) -> tuple[int, int] | tuple[None, None]:
+    if os.name == "nt":
+        return _get_windows_resolution(exe_path)
+
+    sdl_driver = os.getenv("SDL_VIDEODRIVER", "").strip().lower()
+    if sdl_driver == "wayland":
+        w, h = _get_wayland_resolution()
+        if w and h:
+            return w, h
+        return _get_x11_resolution()
+
+    w, h = _get_x11_resolution()
+    if w and h:
+        return w, h
+    return _get_wayland_resolution()
 
 
 def _read_game_settings(game_dir: Path) -> dict:
@@ -121,7 +573,10 @@ def _read_game_settings(game_dir: Path) -> dict:
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
                     for i in range(winreg.QueryInfoKey(key)[1]):
                         name, value, _ = winreg.EnumValue(key, i)
-                        settings[name] = value
+                        try:
+                            settings[name] = int(value)
+                        except (ValueError, TypeError):
+                            settings[name] = value
             except FileNotFoundError:
                 pass
             except Exception as e:
@@ -132,8 +587,17 @@ def _read_game_settings(game_dir: Path) -> dict:
             try:
                 with vdf_path.open("r", encoding="utf-8") as f:
                     data = vdf.load(f)
-                    if "videoconfig" in data:
-                        for k, v in data["videoconfig"].items():
+                    videoconfig = None
+                    for section_name, section_val in data.items():
+                        if (
+                            isinstance(section_name, str)
+                            and section_name.lower() == "videoconfig"
+                            and isinstance(section_val, dict)
+                        ):
+                            videoconfig = section_val
+                            break
+                    if videoconfig is not None:
+                        for k, v in videoconfig.items():
                             try:
                                 settings[k] = int(v)
                             except (ValueError, TypeError):
@@ -865,7 +1329,12 @@ def _rename_game_dir(old_path: Path, new_path: Path) -> None:
             if new_path.exists() and new_path.is_dir()
             else (False, False)
         )
-        if new_path.exists() and new_path.is_dir() and not has_entries and not unreadable:
+        if (
+            new_path.exists()
+            and new_path.is_dir()
+            and not has_entries
+            and not unreadable
+        ):
             new_path.rmdir()
         new_path.parent.mkdir(parents=True, exist_ok=True)
         old_path.rename(new_path)
@@ -937,8 +1406,10 @@ def get_game_dir(dest: Path | None = None) -> Path:
 
             drive = Path.home().drive
             legacy_root_tc2 = Path(f"{drive}\\") / "tc2"
-            should_init_unset = is_unset and is_default_dest and (
-                legacy_root_tc2.exists() or not default_game_dest.exists()
+            should_init_unset = (
+                is_unset
+                and is_default_dest
+                and (legacy_root_tc2.exists() or not default_game_dest.exists())
             )
 
             if should_init_unset or is_default_tc2 or is_too_short:
@@ -1185,34 +1656,51 @@ def launch_game(
     extra_options_set = set(extra_options)
     banned_opts = []
 
-    res_w, res_h = get_native_resolution()
-    game_settings = _read_game_settings(exe_path.parent)
-
-    # Resolution check
-    res_opts = ["-w", "-width", "-h", "-height"]
-    has_res_opt = any(opt in extra_options_set for opt in res_opts)
-
     if "-nosentry" not in extra_options_set:
         default_args += ["-nobreakpad", "-nominidumps"]
 
-    if not has_res_opt and res_w and res_h:
-        conf_w = game_settings.get("ScreenWidth")
-        conf_h = game_settings.get("ScreenHeight")
-        if conf_w is None or conf_h is None or conf_w > res_w or conf_h > res_h:
-            default_args += ["-w", str(res_w), "-h", str(res_h)]
+    if not dedicated:
+        res_w, res_h = get_native_resolution(exe_path)
+        game_settings = _read_game_settings(exe_path.parent)
 
-    # Window mode check
-    window_check_opts = ["-sw", "-windowed", "-noborder", "-full", "-fullscreen"]
-    has_window_opt = any(opt in extra_options_set for opt in window_check_opts)
+        # Resolution check
+        res_opts = ["-w", "-width", "-h", "-height", "+mat_setvideomode"]
+        has_res_opt = any(opt in extra_options_set for opt in res_opts)
 
-    if not has_window_opt:
-        conf_windowed = game_settings.get("ScreenWindowed")
-        conf_noborder = game_settings.get("ScreenNoBorder")
-        if conf_windowed is None or conf_noborder is None:
-            if os.name == "nt":
-                default_args += ["-sw", "-noborder"]
-            else:
-                default_args += ["-full"]
+        if not has_res_opt and res_w and res_h:
+            conf_w = game_settings.get("ScreenWidth")
+            conf_h = game_settings.get("ScreenHeight")
+            if (
+                not isinstance(conf_w, int)
+                or not isinstance(conf_h, int)
+                or conf_w <= 0
+                or conf_h <= 0
+                or conf_w > res_w
+                or conf_h > res_h
+            ):
+                default_args += ["-w", str(res_w), "-h", str(res_h)]
+
+        # Window mode check
+        window_check_opts = [
+            "-sw",
+            "-startwindowed",
+            "-window",
+            "-windowed",
+            "-noborder",
+            "-full",
+            "-fullscreen",
+            "+mat_setvideomode",
+        ]
+        has_window_opt = any(opt in extra_options_set for opt in window_check_opts)
+
+        if not has_window_opt:
+            conf_windowed = game_settings.get("ScreenWindowed")
+            conf_noborder = game_settings.get("ScreenNoBorder")
+            if conf_windowed is None or conf_noborder is None:
+                if os.name == "nt":
+                    default_args += ["-sw", "-noborder"]
+                else:
+                    default_args += ["-full"]
 
     if os.name == "nt":
         if vk_supported and "-dx9" not in extra_options_set:
@@ -1422,7 +1910,11 @@ def change_install_folder(new_game_dir: Path, dest: Path | None = None):
             )
             return
 
-        if os.name == "nt" and old_game_dir.exists() and _is_game_running_in_dir(old_game_dir):
+        if (
+            os.name == "nt"
+            and old_game_dir.exists()
+            and _is_game_running_in_dir(old_game_dir)
+        ):
             logger.error("Cannot move game directory while the game is running.")
             return
 
